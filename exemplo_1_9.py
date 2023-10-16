@@ -29,7 +29,9 @@ def c0_bar(E: float, L: float, A: float, P: int, Nel: int):
             xn[no_int] = xn[e] + (i + 1) * dhe
             no_int += 1
 
-    csi, wi = get_points_weights(0, 0, 2 * (P - 1), IntegrationTypes.GJ, "x")
+    intorder = 2 * (P - 1)
+
+    csi, wi = get_points_weights(0, 0, intorder, IntegrationTypes.GJ, "x")
 
     # Numero de pontos de integracao
     Nint = len(csi)
@@ -87,7 +89,7 @@ def c0_bar(E: float, L: float, A: float, P: int, Nel: int):
     SigmaEls = np.zeros((Nel, P + 1))
 
     csip = np.linspace(-1, 1, P + 1)
-    Becsip = d_lagrange_poli(degree=P, pi_coords=csip, pc_coords=csipc)
+    Becsip = d_lagrange_poli(degree=P, calc_pts_coords=csip, placement_pts_coords=csipc)
 
     # Solucao analitica do deslocamento axial, deformacao longitudinal e tensao normal
     xi = np.arange(0, L + he / 5, he / 5)

@@ -6,6 +6,7 @@ from nptyping import NDArray, Double, Shape, Int
 
 OneDArray = NDArray[Shape["Any"], Double]
 
+
 def jacobi_polynomials(r: OneDArray, m: Int, alfa: Double, beta: Double) -> OneDArray:
     # Two initial terms of the recurrence relation
     Pn = 1
@@ -196,6 +197,12 @@ def quadrature_gauss_jacobi(alfa: Double, beta: Double, intorder: Int):
     return x, w
 
 
+def quadrature_gauss_jacobi_n_pts(n_points: Int, alfa: Double = 0, beta: Double = 0):
+    x = jacobi_root(alfa, beta, n_points)
+    w = gauss_jacobi_weights(x, alfa, beta)
+    return x, w
+
+
 def quadrature_gauss_radau_jacobi(alfa: Double, beta: Double, intorder: Int):
     n_points = math.ceil(0.5 * (intorder + 2))
     x = np.zeros(n_points)
@@ -228,7 +235,11 @@ def quadrature_gauss_lobato_jacobi(alfa: Double, beta: Double, intorder: Int):
 
 
 def get_points_weights(
-    alfa: Double, beta: Double, intorder: Int, type_int: IntegrationTypes, coordinate
+    alfa: Double = 0,
+    beta: Double = 0,
+    intorder: Int = 1,
+    type_int: IntegrationTypes = IntegrationTypes.GJ,
+    coordinate: str = "x",
 ) -> tuple[OneDArray, OneDArray]:
     table = {
         IntegrationTypes.GJ: quadrature_gauss_jacobi,
@@ -240,12 +251,12 @@ def get_points_weights(
 
 def lagrange_poli(
     degree: Int,
-    pi_coords: OneDArray,
-    pc_coords: OneDArray,
+    calc_pts_coords: OneDArray,
+    placement_pts_coords: OneDArray,
 ):
     # Initialization and variable allocation
     m = degree + 1
-    n = len(pi_coords)
+    n = len(calc_pts_coords)
     i = np.arange(m)
     b = np.zeros(m)
     phi = np.zeros((m, n))
@@ -253,21 +264,25 @@ def lagrange_poli(
     # Calculate the denominators of Lagrange polynomials
     for k in range(m):
         indices = np.where(i != k)
-        b[k] = np.prod(pc_coords[k] - pc_coords[indices])
+        b[k] = np.prod(placement_pts_coords[k] - placement_pts_coords[indices])
 
     # Calculate the polynomials
     for j in range(n):
         for k in range(m):
             indices = np.where(i != k)
-            phi[k, j] = np.prod(pi_coords[j] - pc_coords[indices]) / b[k]
+            phi[k, j] = (
+                np.prod(calc_pts_coords[j] - placement_pts_coords[indices]) / b[k]
+            )
             pass
 
     return phi
 
 
-def d_lagrange_poli(degree: Int, pi_coords: OneDArray, pc_coords: OneDArray):
+def d_lagrange_poli(
+    degree: Int, calc_pts_coords: OneDArray, placement_pts_coords: OneDArray
+):
     # Initialization and variable allocation
-    n = len(pi_coords)
+    n = len(calc_pts_coords)
     m = degree + 1
     d_phi = np.zeros((m, n))
 
@@ -278,9 +293,9 @@ def d_lagrange_poli(degree: Int, pi_coords: OneDArray, pc_coords: OneDArray):
                 phi = np.ones(n)
                 for j in range(m):
                     if j != i and j != k:
-                        phi *= (np.array(pi_coords) - pc_coords[j]) / (
-                            pc_coords[i] - pc_coords[j]
+                        phi *= (np.array(calc_pts_coords) - placement_pts_coords[j]) / (
+                            placement_pts_coords[i] - placement_pts_coords[j]
                         )
-                d_phi[i, :] += phi / (pc_coords[i] - pc_coords[k])
+                d_phi[i, :] += phi / (placement_pts_coords[i] - placement_pts_coords[k])
 
     return d_phi

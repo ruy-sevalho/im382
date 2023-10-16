@@ -1,4 +1,6 @@
+from functools import partial
 import numpy as np
+import sympy as sp
 import pytest as pt
 from nptyping import Double, Int, NDArray, Shape
 from polynomials import (
@@ -44,6 +46,63 @@ def test_get_points_weight(
     ) == pt.approx(np.array((x_expected, w_expected)), rel=0.001)
 
 
+# Test indicates that gauss-jacobi quadrature fails for low point count and a function composed with sin
+@pt.mark.parametrize("degree", (i for i in range(2, 11)))
+def test_gauss_langrange_quadrature_on_polynomial_composed_trig(degree: int):
+    def f(x):
+        return 1000 * np.sin(np.pi / 2 * x)
+
+    x_zeros = np.linspace(-1, 1, degree + 1)
+    lagrange_poli_pre = partial(
+        lagrange_poli, degree=degree, placement_pts_coords=x_zeros
+    )
+    x_int_trapz = np.linspace(-1, 1, 2001)
+    langrage_poli_x_int_trapz = lagrange_poli_pre(calc_pts_coords=x_int_trapz)
+    x_quadrature_int_pts, int_weights = get_points_weights(intorder=2 * degree + 2)
+    lagrange_poli_quadrature = lagrange_poli_pre(calc_pts_coords=x_quadrature_int_pts)
+    quadrature_values = np.array(
+        tuple(
+            tuple(
+                f(int_pt) * int_weight * lagrange_poly_value
+                for int_pt, int_weight, lagrange_poly_value in zip(
+                    x_quadrature_int_pts, int_weights, lagrange_poly
+                )
+            )
+            for lagrange_poly in lagrange_poli_quadrature
+        )
+    )
+    quadrature_integral = np.array(tuple(np.sum(row) for row in quadrature_values))
+    y = np.array(
+        tuple(
+            tuple(
+                langrage_poli_x_int_trap_value * f(x)
+                for langrage_poli_x_int_trap_value, x in zip(
+                    langrage_poli_x_int_trapz_row, x_int_trapz
+                )
+            )
+            for langrage_poli_x_int_trapz_row in langrage_poli_x_int_trapz
+        )
+    )
+    num_integral = np.array([np.trapz(y_, x_int_trapz) for y_ in y])
+    res = (num_integral - quadrature_integral) / num_integral
+    assert quadrature_integral == pt.approx(num_integral, rel=1e-3)
+
+
+@pt.mark.parametrize("power", (i for i in range(3, 11)))
+def test_gauss_langrange_quadrature_on_polynomial(power: int):
+    x: sp.Symbol = sp.symbols("x")
+    f_symb = x
+    for i in range(2, power):
+        f_symb += x**i
+    def_integral = sp.integrate(f_symb, (x, -1, 1)).evalf()
+    f = sp.lambdify(x, f_symb)
+    int_pts, int_weights = get_points_weights(intorder=power)
+    num_integral = sum(
+        (f(int_pt) * int_weight for int_pt, int_weight in zip(int_pts, int_weights))
+    )
+    assert num_integral == pt.approx(def_integral)
+
+
 @pt.mark.parametrize(
     "degree, pi_coords, pc_coords, expected_phi",
     [
@@ -62,7 +121,7 @@ def test_lagrange_poli(
     expected_phi,
 ):
     assert lagrange_poli(
-        degree=degree, pi_coords=pi_coords, pc_coords=pc_coords
+        degree=degree, calc_pts_coords=pi_coords, placement_pts_coords=pc_coords
     ) == pt.approx(expected_phi, rel=0.001)
 
 
@@ -85,6 +144,6 @@ def test_d_lagrange_poli(
 ):
     assert d_lagrange_poli(
         degree=degree,
-        pi_coords=pi_coords,
-        pc_coords=pc_coords,
+        calc_pts_coords=pi_coords,
+        placement_pts_coords=pc_coords,
     ) == pt.approx(expected_dphi, rel=0.001)
