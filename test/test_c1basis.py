@@ -55,6 +55,6 @@ def test_c1basis(
     shape_f_2d,
     shape_f_3d,
 ):
-    assert np.array(c1_basis(P=degree, Coords=coords, he=element_size)) == pt.approx(
-        np.array((shape_f, shape_f_1d, shape_f_2d, shape_f_3d)), rel=0.001
-    )
+    assert np.array(
+        c1_basis(degree=degree, calc_pts_coords=coords, element_size=element_size)
+    ) == pt.approx(np.array((shape_f, shape_f_1d, shape_f_2d, shape_f_3d)), rel=0.001)

@@ -1,9 +1,10 @@
-from dataclasses import dataclass
-from functools import partial
+from dataclasses import asdict, dataclass
+from functools import cached_property, lru_cache, partial
 from typing import Callable
-from dataclasses import asdict
 import numpy as np
 import pandas as pd
+from bar_1d import BarInput
+from nomeclature import NUM_DISPLACEMENT, NUM_STRAIN, X_COORD
 
 from polynomials import (
     IntegrationTypes,
@@ -12,20 +13,7 @@ from polynomials import (
     lagrange_poli,
     quadrature_gauss_jacobi_n_pts,
 )
-from post_processing import calc_approx_value
-
-
-@dataclass
-class C0BarInput:
-    young_modulus: float
-    section_area: float
-    length: float
-    poly_degree: int
-    n_elements: int
-    load_function: Callable[[float], float]
-
-    def calc_results(self):
-        return c0_bar(**asdict(self))
+from post_processing import calc_approx_value, calc_error_squared, calc_l2_error_norm
 
 
 @dataclass
@@ -44,7 +32,7 @@ def c0_bar(
     young_modulus: float,
     section_area: float,
     length: float,
-    poly_degree: int,
+    degree: int,
     n_elements: int,
     load_function: Callable[[float], float],
 ):
@@ -52,18 +40,18 @@ def c0_bar(
     stiffness = young_modulus * section_area
     det_j = calc_element_1D_jacobian(length / n_elements)
     x_knots_global = calc_x_knots_global(
-        length=length, poly_degree=poly_degree, n_elements=n_elements
+        length=length, degree=degree, n_elements=n_elements
     )
     n_knots = x_knots_global.shape[0]
-    x_knots_local = calc_x_knots_local(degree=poly_degree)
+    x_knots_local = calc_x_knots_local(degree=degree)
 
     # relative to numerical integration of approx solution dericative to calculate de stuiffness matrix
-    # intorder is corrected since we are intgreting phi1' * phi1' giving a 28(P-1) order polynomial
+    # intorder is corrected since we are intgreting phi1' * phi1' giving a 2*(P-1) order polynomial
     integration_points, integration_weights = get_points_weights(
-        intorder=2 * (poly_degree - 1),
+        intorder=2 * (degree - 1),
     )
     b_esci_matrix_at_int_pts = d_lagrange_poli(
-        degree=poly_degree,
+        degree=degree,
         calc_pts_coords=integration_points,
         placement_pts_coords=x_knots_local,
     )
@@ -75,7 +63,7 @@ def c0_bar(
     )
     # end of numerical integration of stiffness matrix
 
-    incidence_matrix = calc_incidence_matrix(n_elements=n_elements, degree=poly_degree)
+    incidence_matrix = calc_incidence_matrix(n_elements=n_elements, degree=degree)
     global_stiffness_matrix = compose_global_matrix(
         element_stiffness_matrix=element_stiffness_matrix,
         incindence_matrix=incidence_matrix,
@@ -86,11 +74,11 @@ def c0_bar(
         element_incidence_matrix=incidence_matrix,
         test_function_local=partial(
             lagrange_poli,
-            degree=poly_degree,
+            degree=degree,
             placement_pts_coords=x_knots_local,
         ),
         load_function=load_function,
-        intorder=2 * poly_degree + 2,
+        intorder=2 * degree + 2,
         det_j=det_j,
     )
 
@@ -112,66 +100,19 @@ def c0_bar(
     )
 
 
-# def calc_element_displacement_matrix_vary(
-#     poly_degree, stiffness, det_j, x_knots_local, legendre_quadrature_n_pts: int
-# ):
-#     n = legendre_quadrature_n_pts
-#     integration_points, integration_weights = quadrature_gauss_jacobi_n_pts(
-#         n_points=n,
-#     )
-#     n_esci_matrix_at_int_pts = lagrange_poli(
-#         degree=poly_degree,
-#         calc_pts_coords=integration_points,
-#         placement_pts_coords=x_knots_local,
-#     )
-#     element_matrix = calc_element_stiffness_matrix(
-#         stiffness=stiffness,
-#         b_esci_matrix=n_esci_matrix_at_int_pts,
-#         int_weights=integration_weights,
-#         det_j=det_j,
-#     )
-
-#     return element_matrix
-
-
-# def calc_element_stiffnees_matrix_vary(
-#     poly_degree, stiffness, det_j, x_knots_local, legendre_quadrature_n_pts: int
-# ):
-#     n = legendre_quadrature_n_pts
-#     integration_points, integration_weights = quadrature_gauss_jacobi_n_pts(
-#         n_points=n,
-#     )
-#     b_esci_matrix_at_int_pts = d_lagrange_poli(
-#         degree=poly_degree,
-#         calc_pts_coords=integration_points,
-#         placement_pts_coords=x_knots_local,
-#     )
-#     element_stiffness_matrix = calc_element_stiffness_matrix(
-#         stiffness=stiffness,
-#         b_esci_matrix=b_esci_matrix_at_int_pts,
-#         int_weights=integration_weights,
-#         det_j=det_j,
-#     )
-
-#     return element_stiffness_matrix
-
-
 def calc_x_knots_global(
     length: float,
-    poly_degree: int,
+    degree: int,
     n_elements: int,
 ):
     n_knots_vertices = n_elements + 1
-    # n_knots_internal = n_elements * (poly_degree)
-    # n_knots_total = n_knots_vertices + n_knots_internal
-    # element_size = length / n_elements
 
     x_knots = np.linspace(0, length, n_knots_vertices)
     for n in range(n_elements):
         x_knots = np.concatenate(
             (
                 x_knots,
-                np.linspace(x_knots[n], x_knots[n + 1], poly_degree + 1)[1:-1],
+                np.linspace(x_knots[n], x_knots[n + 1], degree + 1)[1:-1],
             )
         )
     return x_knots
@@ -281,7 +222,7 @@ def calc_strain(
         esci_matrix_=b_ecsi,
         ecsi_calc_pts=ecsi_calc_pts,
         factor=1 / det_j,
-        result_name="strain",
+        result_name=NUM_STRAIN,
     )
     return results
 
@@ -306,8 +247,58 @@ def calc_displacements(
         results = pd.concat(
             [
                 results,
-                pd.DataFrame({"x": x_element_global, "displacement": displacement}),
+                pd.DataFrame(
+                    {X_COORD: x_element_global, NUM_DISPLACEMENT: displacement}
+                ),
             ]
         )
 
     return results
+
+
+@dataclass
+class C0BarAnalysis:
+    input: BarInput
+    displacement_analytical: Callable[[float], float]
+
+    @cached_property
+    def bar_result(self):
+        return c0_bar(**asdict(self.input))
+
+    @cached_property
+    def results(self):
+        results = calc_displacements(
+            degree=self.input.degree,
+            x_knots_global=self.bar_result.x_knots_global,
+            x_knots_local=self.bar_result.x_knots_local,
+            element_incidence_matrix=self.bar_result.incidence_matrix,
+            knot_displacements=self.bar_result.knots_displacements,
+        )
+        results = pd.concat(
+            [
+                results,
+                calc_strain(
+                    degree=self.input.degree,
+                    det_j=self.bar_result.det_j,
+                    x_knots_global=self.bar_result.x_knots_global,
+                    x_knots_local=self.bar_result.x_knots_local,
+                    element_incidence_matrix=self.bar_result.incidence_matrix,
+                    knot_displacements=self.bar_result.knots_displacements,
+                )[NUM_STRAIN],
+            ],
+            axis=1,
+        )
+
+        return calc_error_squared(results, self.displacement_analytical)
+
+    @cached_property
+    def l2_error(self):
+        return calc_l2_error_norm(self.results)
+
+    @cached_property
+    def energy_norm_aprox_sol(self):
+        return (
+            self.bar_result.knots_displacements
+            @ self.bar_result.global_stiffness_matrix
+            @ self.bar_result.knots_displacements
+        ) ** 0.5

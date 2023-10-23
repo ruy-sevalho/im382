@@ -35,7 +35,7 @@ def c1_bar(E: float, L: float, A: float, P: int, Nel: int):
         d1hs,
         d2hs,
         d3hs,
-    ) = c1_basis(P=P, Coords=csi, he=he)
+    ) = c1_basis(degree=P, coords=csi, element_size=he)
 
     Ke = np.zeros((P + 1, P + 1))
     for n in range(Nint):
@@ -89,7 +89,7 @@ def c1_bar(E: float, L: float, A: float, P: int, Nel: int):
         d1hs,
         d2hs,
         d3hs,
-    ) = c1_basis(P=P, Coords=csip, he=he)
+    ) = c1_basis(degree=P, coords=csip, element_size=he)
 
     for e in range(Nel):
         # vetor de deslocamentos nodais do elemento
@@ -139,7 +139,7 @@ def c1_bar(E: float, L: float, A: float, P: int, Nel: int):
         d1hs,
         d2hs,
         d3hs,
-    ) = c1_basis(P=P, Coords=xs_element_local, he=he)
+    ) = c1_basis(degree=P, coords=xs_element_local, element_size=he)
 
     for e in range(Nel):
         xe = (1 - xs_element_local / he) * xn[e] + xs_element_local / he * xn[e + 1]

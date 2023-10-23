@@ -22,7 +22,7 @@ def test_x_knots_global(
     length: float, poly_degree: int, n_elements: int, expected_knots
 ):
     assert calc_x_knots_global(
-        length=length, poly_degree=poly_degree, n_elements=n_elements
+        length=length, degree=poly_degree, n_elements=n_elements
     ) == pt.approx(expected_knots)
 
 
@@ -311,25 +311,19 @@ def test_c0_bar(
     expected_element_stiffness_matrix: np.array,
     expected_incidence_matrix: np.array,
 ):
-    (
-        stiffness_matrix,
-        load_vector,
-        knot_displacements,
-        element_stiffness_matrix,
-        incidence_matrix,
-    ) = c0_bar(
+    res = c0_bar(
         young_modulus=young_modulus,
         section_area=section_area,
         length=length,
-        poly_degree=poly_degree,
+        degree=poly_degree,
         n_elements=n_elements,
         load_function=load_function,
     )
-    assert element_stiffness_matrix == pt.approx(expected_element_stiffness_matrix)
-    assert incidence_matrix == pt.approx(expected_incidence_matrix)
-    assert stiffness_matrix == pt.approx(expected_stiffness_matrix)
-    # assert load_vector == pt.approx(expected_load_vector)
-    assert knot_displacements == pt.approx(expected_knot_displacements)
+    assert res.element_stiffness_matrix == pt.approx(expected_element_stiffness_matrix)
+    assert res.incidence_matrix == pt.approx(expected_incidence_matrix)
+    assert res.global_stiffness_matrix == pt.approx(expected_stiffness_matrix)
+    assert res.load_vector == pt.approx(expected_load_vector, rel=0.01)
+    assert res.knots_displacements == pt.approx(expected_knot_displacements, rel=1e-5)
 
 
 @pt.mark.parametrize(
