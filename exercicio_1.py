@@ -4,7 +4,7 @@ from dataclasses import dataclass
 import numpy as np
 import sympy as sp
 import matplotlib.pyplot as plt
-from basis import c1_basis
+from polynomials import c1_basis
 from polynomials import IntegrationTypes, get_points_weights
 from exemplo_1_9 import c0_bar
 

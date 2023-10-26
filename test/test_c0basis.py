@@ -7,7 +7,7 @@ from c0_basis import (
     calc_incidence_matrix,
     calc_load_vector,
     calc_x_knots_global,
-    calc_x_knots_local,
+    calc_ecsi_placement_coords_equal_dist,
     calc_element_stiffness_matrix,
     compose_global_matrix,
 )
@@ -15,14 +15,22 @@ from polynomials import lagrange_poli
 
 
 @pt.mark.parametrize(
-    "length, poly_degree, n_elements, expected_knots",
-    [[1, 1, 5, [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]], [1, 2, 2, [0.0, 0.5, 1.0, 0.25, 0.75]]],
+    "length, n_elements, esci_internal_knots_coords, expected_knots",
+    [
+        [1, 5, np.array([-1, 1]), np.array([0.0, 0.2, 0.4, 0.6, 0.8, 1.0])],
+        [1, 2, np.array([-1, 0, 1]), np.array([0.0, 0.5, 1.0, 0.25, 0.75])],
+    ],
 )
 def test_x_knots_global(
-    length: float, poly_degree: int, n_elements: int, expected_knots
+    length: float,
+    n_elements: int,
+    esci_internal_knots_coords: np.ndarray | None,
+    expected_knots: np.ndarray,
 ):
     assert calc_x_knots_global(
-        length=length, degree=poly_degree, n_elements=n_elements
+        length=length,
+        n_elements=n_elements,
+        esci_placement_coords=esci_internal_knots_coords,
     ) == pt.approx(expected_knots)
 
 
@@ -35,11 +43,11 @@ def test_x_knots_global(
     ),
 )
 def test_x_knots_local(degree: int, expected_knots: np.array):
-    assert calc_x_knots_local(degree) == pt.approx(expected_knots)
+    assert calc_ecsi_placement_coords_equal_dist(degree) == pt.approx(expected_knots)
 
 
 @pt.mark.parametrize(
-    "young_modulus, section_area, length, poly_degree, n_elements, load_function, expected_stiffness_matrix, expected_load_vector, expected_knot_displacements, expected_element_stiffness_matrix, expected_incidence_matrix",
+    "young_modulus, section_area, length, poly_degree, n_elements, load_function, x_knots_local_function, expected_stiffness_matrix, expected_load_vector, expected_knot_displacements, expected_element_stiffness_matrix, expected_incidence_matrix",
     (
         (
             100000000000.0,
@@ -48,6 +56,7 @@ def test_x_knots_local(degree: int, expected_knots: np.array):
             3,
             4,
             lambda x: 1000 * np.sin(np.pi / 2 * x),
+            calc_ecsi_placement_coords_equal_dist,
             np.array(
                 [
                     [
@@ -305,6 +314,12 @@ def test_c0_bar(
         ],
         float,
     ],
+    x_knots_local_function: Callable[
+        [
+            int,
+        ],
+        float,
+    ],
     expected_stiffness_matrix: np.array,
     expected_load_vector: np.array,
     expected_knot_displacements: np.array,
@@ -318,6 +333,7 @@ def test_c0_bar(
         degree=poly_degree,
         n_elements=n_elements,
         load_function=load_function,
+        ecsi_placement_coords_function=x_knots_local_function,
     )
     assert res.element_stiffness_matrix == pt.approx(expected_element_stiffness_matrix)
     assert res.incidence_matrix == pt.approx(expected_incidence_matrix)
@@ -667,7 +683,7 @@ def test_load_vector(
 ):
     assert calc_load_vector(
         x_knots=x_knots,
-        element_incidence_matrix=element_incidence_matrix,
+        incidence_matrix=element_incidence_matrix,
         test_function_local=test_function_local,
         load_function=load_function,
         intorder=intorder,

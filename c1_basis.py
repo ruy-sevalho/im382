@@ -5,12 +5,13 @@ from typing import Callable
 import numpy as np
 import pandas as pd
 from bar_1d import BarInput
-from basis import c1_basis
+from polynomials import c1_basis
 
 from c0_basis import (
     calc_element_1D_jacobian,
     calc_element_stiffness_matrix,
     compose_global_matrix,
+    calc_load_vector,
 )
 from nomeclature import NUM_DISPLACEMENT, NUM_STRAIN
 from polynomials import get_points_weights
@@ -20,13 +21,13 @@ from post_processing import calc_approx_value, calc_error_squared, calc_l2_error
 @dataclass
 class C1BarResults:
     det_j: float
-    x_knots_global: np.array
-    n_degrees_total: int
-    element_stiffness_matrix: np.array
-    incidence_matrix: np.array
-    global_stiffness_matrix: np.array
-    load_vector: np.array
-    knots_displacements: np.array
+    x_knots_global: np.ndarray
+    n_degrees_freedom: int
+    element_stiffness_matrix: np.ndarray
+    incidence_matrix: np.ndarray
+    global_stiffness_matrix: np.ndarray
+    load_vector: np.ndarray
+    knots_displacements: np.ndarray
 
 
 def c1_bar(
@@ -76,11 +77,12 @@ def c1_bar(
     )
     load_vector = calc_load_vector(
         x_knots=x_knots_global,
-        element_incidence_matrix=incidence_matrix,
+        incidence_matrix=incidence_matrix,
         test_function_local=partial(
             c1_basis,
             degree=degree,
             element_size=length / n_elements,
+            return_derivative_order=0,
         ),
         load_function=load_function,
         intorder=2 * degree + 2,
@@ -106,7 +108,7 @@ def c1_bar(
     return C1BarResults(
         det_j=det_j,
         x_knots_global=x_knots_global,
-        n_degrees_total=n_degrees_total,
+        n_degrees_freedom=n_degrees_total,
         element_stiffness_matrix=element_stiffness_matrix,
         incidence_matrix=incidence_matrix,
         global_stiffness_matrix=global_stiffness_matrix,
@@ -141,31 +143,6 @@ def calc_incidence_matrix(n_elements: int, degree: int):
         )
 
     return incidence_matrix
-
-
-def calc_load_vector(
-    x_knots: np.array,
-    element_incidence_matrix: np.array,
-    test_function_local: Callable[[np.array], np.array],
-    load_function: Callable[[float], float],
-    intorder: int,
-    det_j: float,
-):
-    ecsi_local_int_pts, weight_int_pts = get_points_weights(intorder=intorder)
-    n_esci_matrix, _, _, _ = test_function_local(calc_pts_coords=ecsi_local_int_pts)
-    global_load_vector = np.zeros(element_incidence_matrix[-1, -1] + 1)
-    for i, element_incidence in enumerate(element_incidence_matrix):
-        load_function_at_x = np.array(
-            [
-                load_function(x)
-                for x in np.interp(ecsi_local_int_pts, [-1, 1], x_knots[i : i + 2])
-            ]
-        )
-        load_vector = det_j * np.array(
-            [np.sum(row * weight_int_pts * load_function_at_x) for row in n_esci_matrix]
-        )
-        global_load_vector[element_incidence] += load_vector
-    return global_load_vector
 
 
 @dataclass

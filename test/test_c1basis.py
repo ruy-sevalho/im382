@@ -1,7 +1,6 @@
 import numpy as np
-from basis import c1_basis
+from polynomials import c1_basis
 import pytest as pt
-from nptyping import Double, Int, NDArray, Shape
 
 
 @pt.mark.parametrize(
@@ -49,7 +48,7 @@ from nptyping import Double, Int, NDArray, Shape
 def test_c1basis(
     degree: float,
     element_size: float,
-    coords: NDArray[Shape["1"], Double],
+    coords: np.ndarray,
     shape_f,
     shape_f_1d,
     shape_f_2d,

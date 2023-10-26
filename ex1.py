@@ -1,11 +1,14 @@
-from dataclasses import asdict, replace
-import math
+from dataclasses import replace
 import numpy as np
 import sympy as sy
 import matplotlib.pyplot as plt
 from bar_1d import BarInput
-from c0_basis import C0BarAnalysis
-from nomeclature import NUM_DISPLACEMENT, X_COORD
+from c0_basis import (
+    C0BarAnalysis,
+    calc_ecsi_placement_coords_gauss_lobato,
+)
+from c1_basis import C1BarAnalysis
+from nomeclature import NUM_DISPLACEMENT, X_COORD, NUM_STRAIN
 
 
 young_modulus = 100e9
@@ -44,7 +47,7 @@ bar_input_h_study = BarInput(
     young_modulus=young_modulus,
     section_area=section_area,
     length=length,
-    degree=1,
+    degree=3,
     n_elements=4,
     load_function=load_function,
 )
@@ -53,55 +56,109 @@ bar_input_p_study = BarInput(
     young_modulus=young_modulus,
     section_area=section_area,
     length=length,
-    degree=2,
+    degree=3,
     n_elements=2,
     load_function=load_function,
 )
 
 
-n_elements_cases = (4, 6, 8, 10, 12)
-degrees = (2, 3, 4, 5, 6)
-degrees_freedom = (5, 7, 9, 11, 13)
-h_study = dict()
-p_study = dict()
+n_elements_cases = (4, 6, 8, 10)
+degrees = (3, 4, 5, 6)
+
+h_study_c0 = dict()
+p_study_c0 = dict()
+h_study_c1 = dict()
+p_study_c1 = dict()
 
 for n_elements in n_elements_cases:
-    h_study[n_elements] = C0BarAnalysis(
+    h_study_c0[n_elements] = C0BarAnalysis(
+        input=replace(bar_input_h_study, n_elements=n_elements),
+        displacement_analytical=displacement_analytical,
+        ecsi_placement_coords_function=calc_ecsi_placement_coords_gauss_lobato,
+    )
+    h_study_c1[n_elements] = C1BarAnalysis(
         input=replace(bar_input_h_study, n_elements=n_elements),
         displacement_analytical=displacement_analytical,
     )
 
+
 for degree in degrees:
-    p_study[degree] = C0BarAnalysis(
+    p_study_c0[degree] = C0BarAnalysis(
+        input=replace(
+            bar_input_p_study,
+            degree=degree,
+        ),
+        displacement_analytical=displacement_analytical,
+        ecsi_placement_coords_function=calc_ecsi_placement_coords_gauss_lobato,
+    )
+    p_study_c1[degree] = C1BarAnalysis(
         input=replace(bar_input_p_study, degree=degree),
         displacement_analytical=displacement_analytical,
     )
 
-l2_error_h = tuple(case.l2_error for case in h_study.values())
-energy_h_ = tuple(case.energy_norm_aprox_sol for case in h_study.values())
-energy_diff_h = tuple(
-    analytical_energy - case.energy_norm_aprox_sol for case in h_study.values()
+
+degrees_freedom_h = tuple(
+    case.bar_result.n_degrees_freedom for case in h_study_c0.values()
+)
+l2_error_h_c0 = tuple(case.l2_error for case in h_study_c0.values())
+l2_error_h_c1 = tuple(case.l2_error for case in h_study_c1.values())
+energy_diff_h_c0 = tuple(
+    analytical_energy - case.energy_norm_aprox_sol for case in h_study_c0.values()
+)
+energy_diff_h_c1 = tuple(
+    analytical_energy - case.energy_norm_aprox_sol for case in h_study_c1.values()
 )
 
-l2_error_p = tuple(case.l2_error for case in p_study.values())
-energy_diff_p = tuple(
-    analytical_energy - case.energy_norm_aprox_sol for case in p_study.values()
+degrees_freedom_p = tuple(
+    case.bar_result.n_degrees_freedom for case in p_study_c0.values()
+)
+l2_error_p_c0 = tuple(case.l2_error for case in p_study_c0.values())
+l2_error_p_c1 = tuple(case.l2_error for case in p_study_c1.values())
+energy_diff_p_c0 = tuple(
+    analytical_energy - case.energy_norm_aprox_sol for case in p_study_c0.values()
+)
+energy_diff_p_c1 = tuple(
+    analytical_energy - case.energy_norm_aprox_sol for case in p_study_c1.values()
 )
 
 
+ax: plt.Axes
 fig, ax = plt.subplots()
-energy_h = (0.1405, 0.1419, 0.1421)
-errors_h = (0.0018, 4.5764e-04, 2.0332e-04)
-errors_p = (7.3568e-05, 8.0004e-10, 4.4409e-16)
-ax.loglog(degrees_freedom, energy_diff_h, label="ref h")
-ax.loglog(degrees_freedom, energy_diff_p, label="ref p")
+ax.set_title("h ref")
+ax.set_xlabel("degrees of freedom")
+ax.set_ylabel("energy diff")
+ax.loglog(degrees_freedom_h, energy_diff_h_c0, label="c0")
+ax.loglog(degrees_freedom_h, energy_diff_h_c1, label="c1")
 fig.legend()
 
+ax2: plt.Axes
 fig2, ax2 = plt.subplots()
+ax2.set_title("p ref")
+ax2.set_xlabel("degrees of freedom")
+ax2.set_ylabel("energy diff")
+ax2.loglog(degrees_freedom_p, energy_diff_p_c0, label="c0")
+ax2.loglog(degrees_freedom_p, energy_diff_p_c1, label="c1")
+fig2.legend()
 
-ax2.loglog(degrees_freedom, l2_error_h, label="ref h")
-ax2.loglog(degrees_freedom, l2_error_p, label="ref p")
-fig.legend()
+ax3: plt.Axes
+fig3, ax3 = plt.subplots()
+ax3.set_title("h ref")
+ax3.set_xlabel("degrees of freedom")
+ax3.set_ylabel("l2 error")
+ax3.loglog(degrees_freedom_h, l2_error_h_c0, label="c0")
+ax3.loglog(degrees_freedom_h, l2_error_h_c1, label="c1")
+fig3.legend()
+
+ax4: plt.Axes
+fig4, ax4 = plt.subplots()
+ax4.set_title("p ref")
+ax4.set_xlabel("degrees of freedom")
+ax4.set_ylabel("l2 error")
+ax4.loglog(degrees_freedom_p, l2_error_p_c0, label="c0")
+ax4.loglog(degrees_freedom_p, l2_error_p_c1, label="c1")
+fig4.legend()
+
+
 # fig, (strain_plot, disp_plot) = plt.subplots(2, sharex=True)
 # disp_plot.set_xlabel("x(m)")
 # strain_plot.plot(
@@ -119,3 +176,40 @@ fig.legend()
 # disp_plot.plot(results[X_COORD], results[NUM_DISPLACEMENT], label="num")
 # disp_plot.set_ylabel("displacement")
 # fig.legend()
+
+# bar_results = [x.bar_result for x in p_study.values()]
+# results = [x.results for x in p_study.values()]
+# results_gl = [x.results for x in p_study_gauss_lobato.values()]
+
+# fig_disp, disp_plot = plt.subplots()
+
+# disp_plot.set_xlabel("x(m)")
+# disp_plot.set_ylabel("u(m)")
+# disp_plot.plot(
+#     results[0][X_COORD],
+#     [displacement_analytical(xs) for xs in results[0][X_COORD]],
+#     label="analytical",
+# )
+
+
+# def plot_result(ax, result_df, key: str, name: str = "disp"):
+#     ax.plot(result_df[X_COORD], result_df[key], label=name)
+
+
+# def plot_results(ax, result_dfs, key: str, name: str = "disp"):
+#     for i, r in enumerate(result_dfs):
+#         plot_result(disp_plot, r, key, f"{name} {i+2}")
+
+
+# plot_results(disp_plot, result_dfs=results, key=NUM_DISPLACEMENT, name="std")
+
+# plot_results(disp_plot, result_dfs=results_gl, key=NUM_DISPLACEMENT, name="gl")
+
+# fig_disp.legend()
+
+# fig_strain, strain_plot = plt.subplots()
+
+# for i, r in enumerate(results):
+#     plot_result(strain_plot, r, NUM_STRAIN, f"{i+2}")
+
+# fig_strain.legend()

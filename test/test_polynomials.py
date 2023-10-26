@@ -2,10 +2,8 @@ from functools import partial
 import numpy as np
 import sympy as sp
 import pytest as pt
-from nptyping import Double, Int, NDArray, Shape
 from polynomials import (
     IntegrationTypes,
-    OneDArray,
     get_points_weights,
     lagrange_poli,
     d_lagrange_poli,
@@ -27,13 +25,13 @@ from polynomials import (
     ],
 )
 def test_get_points_weight(
-    alfa: Double,
-    beta: Double,
-    intorder: Int,
+    alfa: float,
+    beta: float,
+    intorder: int,
     type_int: IntegrationTypes,
     coordinate,
-    x_expected: NDArray[Shape["Any"], Double],
-    w_expected: NDArray[Shape["Any"], Double],
+    x_expected: np.ndarray,
+    w_expected: np.ndarray,
 ):
     assert np.array(
         get_points_weights(
@@ -115,9 +113,9 @@ def test_gauss_langrange_quadrature_on_polynomial(power: int):
     ],
 )
 def test_lagrange_poli(
-    degree: Int,
-    pi_coords: OneDArray,
-    pc_coords: OneDArray,
+    degree: int,
+    pi_coords: np.ndarray,
+    pc_coords: np.ndarray,
     expected_phi,
 ):
     assert lagrange_poli(
@@ -137,9 +135,9 @@ def test_lagrange_poli(
     ],
 )
 def test_d_lagrange_poli(
-    degree: Int,
-    pi_coords: OneDArray,
-    pc_coords: OneDArray,
+    degree: int,
+    pi_coords: np.ndarray,
+    pc_coords: np.ndarray,
     expected_dphi,
 ):
     assert d_lagrange_poli(
