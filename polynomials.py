@@ -293,8 +293,8 @@ def get_points_weights_degree(
 
 
 def lagrange_poli(
-    degree: int,
     calc_pts_coords: np.ndarray,
+    degree: int,
     placement_pts_coords: np.ndarray,
 ):
     # Initialization and variable allocation
@@ -322,7 +322,9 @@ def lagrange_poli(
 
 
 def d_lagrange_poli(
-    degree: int, calc_pts_coords: np.ndarray, placement_pts_coords: np.ndarray
+    calc_pts_coords: np.ndarray,
+    placement_pts_coords: np.ndarray,
+    degree: int,
 ):
     # Initialization and variable allocation
     n = len(calc_pts_coords)
@@ -345,8 +347,8 @@ def d_lagrange_poli(
 
 
 def c1_basis(
-    degree: int,
     calc_pts_coords: np.ndarray,
+    degree: int,
     element_size: float,
     return_derivative_order: int | None = None,
 ) -> np.ndarray | tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:

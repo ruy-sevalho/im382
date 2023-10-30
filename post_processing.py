@@ -11,22 +11,21 @@ from nomeclature import (
 
 
 def calc_approx_value(
-    x_knots_global: np.array,
-    element_incidence_matrix: np.array,
-    knot_displacements: np.array,
-    esci_matrix_: np.array,
-    ecsi_calc_pts: np.array = None,
+    p_knots_global: np.ndarray,
+    element_incidence_matrix: np.ndarray,
+    knot_displacements: np.ndarray,
+    esci_matrix_: np.ndarray,
     factor: float = 1,
     result_name: str = "res",
 ):
     results = pd.DataFrame()
 
     for i, e in enumerate(element_incidence_matrix):
-        x_element_global = np.interp(ecsi_calc_pts, [-1, 1], x_knots_global[i : i + 2])
+        p_element_global = esci_matrix_.T @ p_knots_global[e]
         element_displacements = knot_displacements[e]
         res = np.array([factor * col @ element_displacements for col in esci_matrix_.T])
         results = pd.concat(
-            [results, pd.DataFrame({X_COORD: x_element_global, result_name: res})]
+            [results, pd.DataFrame({X_COORD: p_element_global, result_name: res})],
         )
 
     return results
@@ -36,9 +35,9 @@ def calc_error_squared(
     results: pd.DataFrame,
     analytical_solution: Callable[
         [
-            float,
+            np.ndarray,
         ],
-        float,
+        np.ndarray,
     ],
 ):
     results[ANALYTICAL_DISPLACEMENT] = results[X_COORD].apply(analytical_solution)

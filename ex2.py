@@ -9,7 +9,9 @@ from energy_norm import calc_energy_norm
 from newton_raphson import (
     ConvergenceCriteria,
     NewtonRaphsonConvergenceParam,
-    C0BarAnalysis,
+    C0BarAnalysisInput,
+    C1BarAnalysisInput,
+    BarAnalysis,
 )
 from nomeclature import NUM_DISPLACEMENT, X_COORD
 
@@ -31,7 +33,7 @@ p, lambda_, mu, cp, A = sy.symbols("p lambda mu C_p A")
 energy_norm = calc_energy_norm(
     mu=lame_mu, lambda_=lame_lambda, area=section_area, length=length
 )
-displacement_analytical_symb = 0.2 * p + 0.1 * sy.sin(p)
+displacement_analytical_symb = 0.2 * p + 0.1 * sy.sin(p)  # type: ignore
 displacement_analytical_num = sy.lambdify(p, displacement_analytical_symb)
 grad_p = 1 + sy.diff(displacement_analytical_symb, p)
 cauchy_green = grad_p**2
@@ -91,29 +93,52 @@ convernge_criteria = NewtonRaphsonConvergenceParam(
     precision=1e-7,
 )
 
-analysis = C0BarAnalysis(
+analysis = BarAnalysis(
+    inputs=C0BarAnalysisInput(
+        bar_input=bar,
+        ecsi_placement_pts_function=calc_ecsi_placement_coords_gauss_lobato,
+    ),
     convergence_crit=convernge_criteria,
-    bar_input=bar,
-    ecsi_placement_pts_function=calc_ecsi_placement_coords_gauss_lobato,
 )
 
+analysis_c1 = BarAnalysis(
+    inputs=C1BarAnalysisInput(bar_input=bar),
+    convergence_crit=convernge_criteria,
+)
+
+
 res = analysis.bar_result
-crit_res_step = res.crit_residue_per_step
+# res_c1 = analysis_c1.bar_result
 
 ax: plt.Axes
 fig, ax = plt.subplots()
 
 col_pts = analysis.pre_process.collocation_pts
+col_pts_c1 = analysis_c1.pre_process.collocation_pts
+x_knots_c1 = analysis_c1.pre_process.x_knots_global
 col_pts_sorted = np.sort(col_pts)
 element_incidence = analysis.pre_process.incidence_matrix
-col_pt_el1 = col_pts[element_incidence[0]]
+element_incidence_c1 = analysis_c1.pre_process.incidence_matrix
+col_pt_el1 = col_pts[element_incidence[1]]
+col_pt_el1_c1 = col_pts_c1[element_incidence_c1[1]]
 
 
-ecsi_pts = analysis.pre_process.ecsi_placement_pts
+def check_p_conversion():
+    return
+
+
+# ecsi_pts = analysis.pre_process.ecsi_placement_pts
 ecsi_pts_test = np.linspace(-1, 1, 11)
 n_ecsi = analysis.n_ecsi(ecsi_pts_test)
+b_ecsi = analysis.b_ecsi(ecsi_pts_test)
+b_ecsi_c1 = analysis_c1.b_ecsi(ecsi_pts_test)
+n_ecsi_c1 = analysis_c1.n_ecsi(ecsi_pts_test)
 ecsi_pts_test_linear_interp = np.interp(ecsi_pts_test, [-1, 1], col_pt_el1[:2])
+ecsi_pts_test_linear_interp_c1 = np.interp(ecsi_pts_test, [-1, 1], x_knots_c1[:2])
 p = n_ecsi.T @ col_pt_el1
+j = b_ecsi.T @ col_pt_el1
+j_c1 = b_ecsi_c1.T @ col_pt_el1_c1
+p1 = n_ecsi_c1.T @ col_pt_el1_c1
 res_df = analysis.result_df()
 
 ax.plot(

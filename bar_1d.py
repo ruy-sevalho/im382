@@ -1,4 +1,4 @@
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from typing import Callable
 
 import numpy as np
@@ -11,7 +11,7 @@ class BarInput:
     length: float
     degree: int
     n_elements: int
-    load_function: Callable[[float], float]
+    load_function: Callable[[np.ndarray], np.ndarray]
 
 
 @dataclass

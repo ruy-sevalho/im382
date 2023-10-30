@@ -36,10 +36,12 @@ def c1_bar(
     length: float,
     degree: int,
     n_elements: int,
-    load_function: Callable[[float], float],
+    load_function: Callable[[np.ndarray], np.ndarray],
 ):
     stiffness = young_modulus * section_area
-    x_knots_global = calc_x_knots_global(length=length, n_elements=n_elements)
+    x_knots_global = calc_x_knots_global_complete(
+        length=length, n_elements=n_elements, degree=degree
+    )
     det_j = calc_element_1D_jacobian(length / n_elements)
 
     n_knots_v = n_elements * 2 + 2
@@ -76,7 +78,7 @@ def c1_bar(
         incindence_matrix=incidence_matrix,
     )
     load_vector = calc_load_vector(
-        x_knots=x_knots_global,
+        collocation_pts=x_knots_global,
         incidence_matrix=incidence_matrix,
         test_function_local=partial(
             c1_basis,
@@ -130,13 +132,10 @@ def calc_x_knots_global_complete(
     degree: int,
 ):
     x_knots = calc_x_knots_global(length=length, n_elements=n_elements)
-    x_knots = np.concatenate(
-        [x_knots[i], 0, x_knots[i+1], 0 for i in range(len(x_knots))]
-    )
+    x_knots = np.concatenate([[x, 0] for x in x_knots])
     if degree > 3:
-        x_knots = np.concatenate([x_knots, np.zeros((degree-3)*n_elements)])
-    return x_knots    
-    
+        x_knots = np.concatenate([x_knots, np.zeros((degree - 3) * n_elements)])
+    return x_knots
 
 
 def calc_incidence_matrix(n_elements: int, degree: int):
@@ -162,27 +161,26 @@ def calc_incidence_matrix(n_elements: int, degree: int):
 
 @dataclass
 class C1BarAnalysis:
-    input: BarInput
-    displacement_analytical: Callable[[float], float]
+    inputs: BarInput
+    displacement_analytical: Callable[[np.ndarray], np.ndarray]
 
     @cached_property
     def bar_result(self):
-        return c1_bar(**asdict(self.input))
+        return c1_bar(**asdict(self.inputs))
 
     @cached_property
     def results(self):
         esci_calc_pts = np.linspace(-1, 1, 21)
         n_ecsi, b_ecsi, _, _ = c1_basis(
-            degree=self.input.degree,
+            degree=self.inputs.degree,
             calc_pts_coords=esci_calc_pts,
-            element_size=self.input.length / self.input.n_elements,
+            element_size=self.inputs.length / self.inputs.n_elements,
         )
         results = calc_approx_value(
-            x_knots_global=self.bar_result.x_knots_global,
+            p_knots_global=self.bar_result.x_knots_global,
             element_incidence_matrix=self.bar_result.incidence_matrix,
             knot_displacements=self.bar_result.knots_displacements,
             esci_matrix_=n_ecsi,
-            ecsi_calc_pts=esci_calc_pts,
             factor=1,
             result_name=NUM_DISPLACEMENT,
         )
@@ -190,11 +188,10 @@ class C1BarAnalysis:
             [
                 results,
                 calc_approx_value(
-                    x_knots_global=self.bar_result.x_knots_global,
+                    p_knots_global=self.bar_result.x_knots_global,
                     element_incidence_matrix=self.bar_result.incidence_matrix,
                     knot_displacements=self.bar_result.knots_displacements,
                     esci_matrix_=b_ecsi,
-                    ecsi_calc_pts=esci_calc_pts,
                     factor=self.bar_result.det_j,
                     result_name=NUM_STRAIN,
                 )[NUM_STRAIN],

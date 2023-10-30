@@ -24,7 +24,7 @@ from polynomials import lagrange_poli
 def test_x_knots_global(
     length: float,
     n_elements: int,
-    esci_internal_knots_coords: np.ndarray | None,
+    esci_internal_knots_coords: np.ndarray,
     expected_knots: np.ndarray,
 ):
     assert calc_x_knots_global(
@@ -612,9 +612,9 @@ def test_incidence_matrix(n_elements: int, degree: int, expected_matrix: np.arra
     ),
 )
 def test_assembly_global_stiffeness(
-    element_stiffeness_matrix: np.array,
-    incidence_matrix: np.array,
-    expected_global_stiffeness: np.array,
+    element_stiffeness_matrix: np.ndarray,
+    incidence_matrix: np.ndarray,
+    expected_global_stiffeness: np.ndarray,
 ):
     assert compose_global_matrix(
         element_stiffness_matrix=element_stiffeness_matrix,
@@ -673,16 +673,16 @@ def test_assembly_global_stiffeness(
     ),
 )
 def test_load_vector(
-    x_knots: np.array,
-    element_incidence_matrix: np.array,
-    test_function_local: Callable[[np.array], np.array],
-    load_function: Callable[[float], float],
+    x_knots: np.ndarray,
+    element_incidence_matrix: np.ndarray,
+    test_function_local: Callable[[np.ndarray], np.ndarray],
+    load_function: Callable[[np.ndarray], float],
     intorder: int,
     det_j: float,
-    expected_load_vector: np.array,
+    expected_load_vector: np.ndarray,
 ):
     assert calc_load_vector(
-        x_knots=x_knots,
+        collocation_pts=x_knots,
         incidence_matrix=element_incidence_matrix,
         test_function_local=test_function_local,
         load_function=load_function,

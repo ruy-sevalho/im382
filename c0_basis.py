@@ -36,8 +36,8 @@ def c0_bar(
     length: float,
     degree: int,
     n_elements: int,
-    load_function: Callable[[float], float],
-    ecsi_placement_coords_function: Callable[[float], np.ndarray],
+    load_function: Callable[[np.ndarray], np.ndarray],
+    ecsi_placement_coords_function: Callable[[int], np.ndarray],
 ):
     """Returns the stiffness matrix, the load vector and knot displacement of a axially loaded bar"""
     stiffness = young_modulus * section_area
@@ -75,7 +75,7 @@ def c0_bar(
     )
     # get_point_degree intorder adjusted to better precision in numerical integration, since load function is trigonometric
     load_vector = calc_load_vector(
-        x_knots=x_knots_global,
+        collocation_pts=x_knots_global,
         incidence_matrix=incidence_matrix,
         test_function_local=partial(
             lagrange_poli,
@@ -177,27 +177,24 @@ def calc_incidence_matrix(n_elements: int, degree: int):
 
 
 def calc_load_vector(
-    x_knots: np.ndarray,
+    collocation_pts: np.ndarray,
     incidence_matrix: np.ndarray,
     test_function_local: Callable[[np.ndarray], np.ndarray],
-    load_function: Callable[[float], float],
+    load_function: Callable[[np.ndarray], np.ndarray],
     intorder: int,
     det_j: float,
 ):
     ecsi_local_int_pts, weight_int_pts = get_points_weights(
         0, 0, intorder, IntegrationTypes.GJ, "x"
     )
-    n_esci_matrix = test_function_local(calc_pts_coords=ecsi_local_int_pts)
+    n_ecsi = test_function_local(calc_pts_coords=ecsi_local_int_pts)  # type: ignore
+
     global_load_vector = np.zeros(incidence_matrix[-1, -1] + 1)
     for i, element_incidence in enumerate(incidence_matrix):
-        load_function_at_x = np.array(
-            [
-                load_function(x)
-                for x in np.interp(ecsi_local_int_pts, [-1, 1], x_knots[i : i + 2])
-            ]
-        )
-        load_vector = det_j * np.array(
-            [np.sum(row * weight_int_pts * load_function_at_x) for row in n_esci_matrix]
+        p_coords = n_ecsi.T @ collocation_pts[element_incidence]
+        load_function_at_x = load_function(p_coords)
+        load_vector = np.array(
+            [np.sum(row * weight_int_pts * load_function_at_x) for row in n_ecsi]
         )
         global_load_vector[element_incidence] += load_vector
     return global_load_vector
@@ -209,16 +206,16 @@ def calc_element_1D_jacobian(element_size: float):
 
 @dataclass
 class C0BarAnalysis:
-    input: BarInput
-    displacement_analytical: Callable[[float], float]
+    inputs: BarInput
+    displacement_analytical: Callable[[np.ndarray], np.ndarray]
     ecsi_placement_coords_function: Callable[
-        [float], np.ndarray
+        [int], np.ndarray
     ] = calc_ecsi_placement_coords_equal_dist
 
     @cached_property
     def bar_result(self):
         return c0_bar(
-            **asdict(self.input),
+            **asdict(self.inputs),
             ecsi_placement_coords_function=self.ecsi_placement_coords_function
         )
 
@@ -226,21 +223,20 @@ class C0BarAnalysis:
     def results(self):
         esci_calc_pts = np.linspace(-1, 1, 21)
         n_ecsi = lagrange_poli(
-            degree=self.input.degree,
+            degree=self.inputs.degree,
             calc_pts_coords=esci_calc_pts,
             placement_pts_coords=self.bar_result.ecsi_knots_local,
         )
         b_ecsi = d_lagrange_poli(
-            degree=self.input.degree,
+            degree=self.inputs.degree,
             calc_pts_coords=esci_calc_pts,
             placement_pts_coords=self.bar_result.ecsi_knots_local,
         )
         results = calc_approx_value(
-            x_knots_global=self.bar_result.x_knots_global,
+            p_knots_global=self.bar_result.x_knots_global,
             element_incidence_matrix=self.bar_result.incidence_matrix,
             knot_displacements=self.bar_result.knots_displacements,
             esci_matrix_=n_ecsi,
-            ecsi_calc_pts=esci_calc_pts,
             factor=1,
             result_name=NUM_DISPLACEMENT,
         )
@@ -248,11 +244,10 @@ class C0BarAnalysis:
             [
                 results,
                 calc_approx_value(
-                    x_knots_global=self.bar_result.x_knots_global,
+                    p_knots_global=self.bar_result.x_knots_global,
                     element_incidence_matrix=self.bar_result.incidence_matrix,
                     knot_displacements=self.bar_result.knots_displacements,
                     esci_matrix_=b_ecsi,
-                    ecsi_calc_pts=esci_calc_pts,
                     factor=self.bar_result.det_j,
                     result_name=NUM_STRAIN,
                 )[NUM_STRAIN],

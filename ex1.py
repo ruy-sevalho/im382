@@ -8,7 +8,7 @@ from c0_basis import (
     calc_ecsi_placement_coords_gauss_lobato,
 )
 from c1_basis import C1BarAnalysis
-from nomeclature import NUM_DISPLACEMENT, X_COORD, NUM_STRAIN
+from nomeclature import NUM_DISPLACEMENT, X_COORD, NUM_STRAIN, ANALYTICAL_DISPLACEMENT
 
 
 young_modulus = 100e9
@@ -19,7 +19,7 @@ n_elements = 2
 x = sy.symbols("x")
 
 
-def load_function(x: float):
+def load_function(x: np.ndarray) -> np.ndarray:
     return 1000 * np.sin(np.pi / 2 * x)
 
 
@@ -65,26 +65,26 @@ bar_input_p_study = BarInput(
 n_elements_cases = (4, 6, 8, 10)
 degrees = (3, 4, 5, 6)
 
-h_study_c0 = dict()
-p_study_c0 = dict()
-h_study_c1 = dict()
-p_study_c1 = dict()
+h_study_c0: dict[int, C0BarAnalysis] = dict()
+p_study_c0: dict[int, C0BarAnalysis] = dict()
+h_study_c1: dict[int, C1BarAnalysis] = dict()
+p_study_c1: dict[int, C1BarAnalysis] = dict()
 
 for n_elements in n_elements_cases:
     h_study_c0[n_elements] = C0BarAnalysis(
-        input=replace(bar_input_h_study, n_elements=n_elements),
+        inputs=replace(bar_input_h_study, n_elements=n_elements),
         displacement_analytical=displacement_analytical,
         ecsi_placement_coords_function=calc_ecsi_placement_coords_gauss_lobato,
     )
     h_study_c1[n_elements] = C1BarAnalysis(
-        input=replace(bar_input_h_study, n_elements=n_elements),
+        inputs=replace(bar_input_h_study, n_elements=n_elements),
         displacement_analytical=displacement_analytical,
     )
 
 
 for degree in degrees:
     p_study_c0[degree] = C0BarAnalysis(
-        input=replace(
+        inputs=replace(
             bar_input_p_study,
             degree=degree,
         ),
@@ -92,13 +92,13 @@ for degree in degrees:
         ecsi_placement_coords_function=calc_ecsi_placement_coords_gauss_lobato,
     )
     p_study_c1[degree] = C1BarAnalysis(
-        input=replace(bar_input_p_study, degree=degree),
+        inputs=replace(bar_input_p_study, degree=degree),
         displacement_analytical=displacement_analytical,
     )
 
 
 degrees_freedom_h = tuple(
-    case.bar_result.n_degrees_freedom for case in h_study_c0.values()
+    case.bar_result.n_degrees_freedom for case in h_study_c1.values()
 )
 l2_error_h_c0 = tuple(case.l2_error for case in h_study_c0.values())
 l2_error_h_c1 = tuple(case.l2_error for case in h_study_c1.values())
@@ -110,7 +110,7 @@ energy_diff_h_c1 = tuple(
 )
 
 degrees_freedom_p = tuple(
-    case.bar_result.n_degrees_freedom for case in p_study_c0.values()
+    case.bar_result.n_degrees_freedom for case in p_study_c1.values()
 )
 l2_error_p_c0 = tuple(case.l2_error for case in p_study_c0.values())
 l2_error_p_c1 = tuple(case.l2_error for case in p_study_c1.values())
@@ -121,6 +121,42 @@ energy_diff_p_c1 = tuple(
     analytical_energy - case.energy_norm_aprox_sol for case in p_study_c1.values()
 )
 
+
+dfs = [
+    (
+        case.results,
+        case.inputs.degree,
+        case.inputs.n_elements,
+    )
+    for case in h_study_c1.values()
+]
+
+
+def plot_result(ax, result_df, key: str, name: str = "disp"):
+    ax.plot(result_df[X_COORD], result_df[key], label=name)
+
+
+def plot_results(ax, result_dfs, key: str, name: str = "disp"):
+    for i, r in enumerate(result_dfs):
+        plot_result(ax, r, key, f"{name} {i+2}")
+
+
+ax_disp: plt.Axes
+
+fig_dips, ax_disp = plt.subplots()
+ax_disp.set_xlabel("x (m)")
+ax_disp.set_ylabel("disp (m)")
+
+for df, degree, n in dfs:
+    plot_result(
+        ax=ax_disp, result_df=df, key=NUM_DISPLACEMENT, name=f"p={degree}, n={n}"
+    )
+
+plot_result(
+    ax=ax_disp, result_df=dfs[0][0], key=ANALYTICAL_DISPLACEMENT, name=f"anaytical"
+)
+
+fig_dips.legend()
 
 ax: plt.Axes
 fig, ax = plt.subplots()
@@ -190,15 +226,6 @@ fig4.legend()
 #     [displacement_analytical(xs) for xs in results[0][X_COORD]],
 #     label="analytical",
 # )
-
-
-# def plot_result(ax, result_df, key: str, name: str = "disp"):
-#     ax.plot(result_df[X_COORD], result_df[key], label=name)
-
-
-# def plot_results(ax, result_dfs, key: str, name: str = "disp"):
-#     for i, r in enumerate(result_dfs):
-#         plot_result(disp_plot, r, key, f"{name} {i+2}")
 
 
 # plot_results(disp_plot, result_dfs=results, key=NUM_DISPLACEMENT, name="std")

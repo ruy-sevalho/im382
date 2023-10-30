@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from typing import Protocol
 from enum import Enum
 from functools import cached_property, partial
 from logging import warning
@@ -16,6 +17,7 @@ from c0_basis import (
 from c0_basis import calc_incidence_matrix as calc_incidence_matrix_c0
 from c1_basis import calc_incidence_matrix as calc_incidence_matrix_c1
 from c1_basis import calc_x_knots_global as calc_knots_global_c1
+from c1_basis import calc_x_knots_global_complete as calc_collocation_pts_c1
 from nomeclature import NUM_DISPLACEMENT
 from polynomials import d_lagrange_poli, get_points_weights, lagrange_poli, c1_basis
 
@@ -317,10 +319,12 @@ class BarNewRaphsonPreProcessing:
     n_degrees_freedom: int
     incidence_matrix: np.ndarray
     collocation_pts: np.ndarray
+    x_knots_global: np.ndarray
     int_weights: np.ndarray
     load_vector: np.ndarray
     b_ecsi: np.ndarray
-    ecsi_placement_pts: np.ndarray
+    n_ecsi_function: Callable[[np.ndarray], np.ndarray]
+    b_ecsi_function: Callable[[np.ndarray], np.ndarray]
 
 
 # def calc_b_esci_matrixes_and_int_weights_c0(
@@ -353,7 +357,7 @@ def c0_pre_processing(
     length: float,
     degree: int,
     n_elements: int,
-    load_function: Callable[[float], float],
+    load_function: Callable[[np.ndarray], np.ndarray],
     ecsi_placement_pts_function: Callable[[int], np.ndarray],
     load_at_end: float,
 ):
@@ -366,20 +370,24 @@ def c0_pre_processing(
     integration_points, integration_weights = get_points_weights(
         intorder=2 * degree,
     )
-    b_esci_matrix_at_int_pts = d_lagrange_poli(
+    b_esci_matrix_function = partial(
+        d_lagrange_poli,
         degree=degree,
+        placement_pts_coords=ecsi_placement_pts,
+    )
+    b_esci_matrix_at_int_pts = b_esci_matrix_function(
         calc_pts_coords=integration_points,
+    )
+    n_ecsi_funtion = partial(
+        lagrange_poli,
+        degree=degree,
         placement_pts_coords=ecsi_placement_pts,
     )
     incidence_matrix = calc_incidence_matrix_c0(n_elements=n_elements, degree=degree)
     load_vector = calc_load_vector(
-        x_knots=x_knots_global,
+        collocation_pts=x_knots_global,
         incidence_matrix=incidence_matrix,
-        test_function_local=partial(
-            lagrange_poli,
-            degree=degree,
-            placement_pts_coords=ecsi_placement_pts,
-        ),
+        test_function_local=n_ecsi_funtion,
         load_function=load_function,
         intorder=2 * degree + 2,
         det_j=det_j,
@@ -390,10 +398,12 @@ def c0_pre_processing(
         n_degrees_freedom=n_degrees_freedom,
         incidence_matrix=incidence_matrix,
         collocation_pts=x_knots_global,
+        x_knots_global=x_knots_global,
         int_weights=integration_weights,
         load_vector=load_vector,
         b_ecsi=b_esci_matrix_at_int_pts,
-        ecsi_placement_pts=ecsi_placement_pts,
+        n_ecsi_function=n_ecsi_funtion,
+        b_ecsi_function=b_esci_matrix_function,
     )
 
 
@@ -401,67 +411,75 @@ def c1_pre_processing(
     length: float,
     degree: int,
     n_elements: int,
-    load_function: Callable[[float], float],
+    load_function: Callable[[np.ndarray], np.ndarray],
     load_at_end: float,
 ):
-    det_j = calc_element_1D_jacobian(length / n_elements)
-    x_knots = calc_knots_global_c1(length=length, n_elements=n_elements)
+    element_size = length / n_elements
+    det_j = calc_element_1D_jacobian(element_size)
+    x_knots_global = calc_knots_global_c1(length=length, n_elements=n_elements)
+    p_knots = calc_collocation_pts_c1(
+        length=length, n_elements=n_elements, degree=degree
+    )
     incidence_matrix = calc_incidence_matrix_c1(n_elements=n_elements, degree=degree)
     n_degrees_freedom = incidence_matrix[-1, -1] + 1
     integration_points, integration_weights = get_points_weights(
         intorder=2 * degree,
     )
+    b_ecsi_function = partial(
+        c1_basis, degree=degree, element_size=element_size, return_derivative_order=1
+    )
+    n_ecsi_function = partial(
+        c1_basis, degree=degree, element_size=element_size, return_derivative_order=0
+    )
     load_vector = calc_load_vector(
-        x_knots=x_knots,
+        collocation_pts=p_knots,
         incidence_matrix=incidence_matrix,
-        test_function_local=partial(
-            c1_basis,
-            degree=degree,
-            element_size=length / n_elements,
-            return_derivative_order=0,
-        ),
+        test_function_local=n_ecsi_function,
         load_function=load_function,
         intorder=2 * degree + 2,
         det_j=det_j,
     )
-    b_esci_matrix_at_int_pts = c1_basis(
-        degree=degree,
+    load_vector[2 * n_elements] += load_at_end
+    b_esci_matrix_at_int_pts: np.ndarray = b_ecsi_function(
         calc_pts_coords=integration_points,
-        element_size=length / n_elements,
-        return_derivative_order=1,
     )
     return BarNewRaphsonPreProcessing(
         det_j=det_j,
         n_degrees_freedom=n_degrees_freedom,
         incidence_matrix=incidence_matrix,
-        collocation_pts=x_knots_global,
+        collocation_pts=p_knots,
+        x_knots_global=x_knots_global,
         int_weights=integration_weights,
         load_vector=load_vector,
         b_ecsi=b_esci_matrix_at_int_pts,
-        ecsi_placement_pts=np.array([-1, 1]),
+        b_ecsi_function=b_ecsi_function,
+        n_ecsi_function=n_ecsi_function,
     )
 
 
-@dataclass
-class C0BarAnalysis:
+class BarAnalysisInput(Protocol):
     bar_input: BarInputNonLiner
-    ecsi_placement_pts_function: Callable[
-        [int], np.ndarray
-    ] = calc_ecsi_placement_coords_equal_dist
+
+    @property
+    def pre_process(self) -> BarNewRaphsonPreProcessing:
+        """Mesh pre processing"""
+        ...
+
+
+@dataclass
+class BarAnalysis:
+    inputs: BarAnalysisInput
     convergence_crit: NewtonRaphsonConvergenceParam = field(
         default_factory=NewtonRaphsonConvergenceParam
     )
 
     @cached_property
+    def bar_input(self):
+        return self.inputs.bar_input
+
+    @cached_property
     def pre_process(self):
-        return c0_pre_processing(
-            length=self.bar_input.length,
-            degree=self.bar_input.degree,
-            n_elements=self.bar_input.n_elements,
-            load_function=self.bar_input.load_function,
-            ecsi_placement_pts_function=self.ecsi_placement_pts_function,
-            load_at_end=self.bar_input.load_at_end,
-        )
+        return self.inputs.pre_process
 
     @cached_property
     def bar_result(self):
@@ -482,37 +500,95 @@ class C0BarAnalysis:
             b_ecsi=self.pre_process.b_ecsi,
         )
 
-    @cached_property
-    def n_ecsi_function(self) -> Callable[[np.ndarray], np.ndarray]:
-        return partial(
-            lagrange_poli,
-            degree=self.bar_input.degree,
-            placement_pts_coords=self.pre_process.ecsi_placement_pts,
-        )
+    def n_ecsi(self, ecsi: np.ndarray) -> np.ndarray:
+        return self.pre_process.n_ecsi_function(calc_pts_coords=ecsi)
 
-    @cached_property
-    def b_ecsi_function(self) -> Callable[[np.ndarray], np.ndarray]:
-        return partial(
-            d_lagrange_poli,
-            degree=self.bar_input.degree,
-            placement_pts_coords=self.pre_process.ecsi_placement_pts,
-        )
-
-    def n_ecsi(self, ecsi: np.ndarray):
-        return self.n_ecsi_function(calc_pts_coords=ecsi)
-
-    def b_ecsi(self, ecsi: np.ndarray):
-        return self.n_ecsi_function(calc_pts_coords=ecsi)
+    def b_ecsi(self, ecsi: np.ndarray) -> np.ndarray:
+        return self.pre_process.b_ecsi_function(calc_pts_coords=ecsi)
 
     def result_df(self, esci_calc_pts: np.ndarray | None = None):
         if esci_calc_pts is None:
             esci_calc_pts = np.linspace(-1, 1, 21)
         return calc_approx_value(
-            x_knots_global=self.pre_process.collocation_pts,
+            p_knots_global=self.pre_process.x_knots_global,
             element_incidence_matrix=self.pre_process.incidence_matrix,
             knot_displacements=self.bar_result.displacements,
             esci_matrix_=self.n_ecsi(esci_calc_pts),
-            ecsi_calc_pts=esci_calc_pts,
             factor=1,
             result_name=NUM_DISPLACEMENT,
+        )
+
+
+@dataclass
+class C0BarAnalysisInput:
+    bar_input: BarInputNonLiner
+    ecsi_placement_pts_function: Callable[
+        [int], np.ndarray
+    ] = calc_ecsi_placement_coords_equal_dist
+    # convergence_crit: NewtonRaphsonConvergenceParam = field(
+    #     default_factory=NewtonRaphsonConvergenceParam
+    # )
+
+    @cached_property
+    def pre_process(self):
+        return c0_pre_processing(
+            length=self.bar_input.length,
+            degree=self.bar_input.degree,
+            n_elements=self.bar_input.n_elements,
+            load_function=self.bar_input.load_function,
+            ecsi_placement_pts_function=self.ecsi_placement_pts_function,
+            load_at_end=self.bar_input.load_at_end,
+        )
+
+    # @cached_property
+    # def bar_result(self):
+    #     return newton_raphson(
+    #         n_load_steps=self.convergence_crit.n_load_steps,
+    #         max_iterations=self.convergence_crit.max_iterations,
+    #         convergence_criteria=self.convergence_crit.convergence_criteria,
+    #         precision=self.convergence_crit.precision,
+    #         young_modulus=self.bar_input.young_modulus,
+    #         poisson=self.bar_input.poisson,
+    #         area=self.bar_input.section_area,
+    #         n_elements=self.bar_input.n_elements,
+    #         n_degrees_freedom=self.pre_process.n_degrees_freedom,
+    #         incidence_matrix=self.pre_process.incidence_matrix,
+    #         collocation_pts=self.pre_process.collocation_pts,
+    #         int_weights=self.pre_process.int_weights,
+    #         load_vector=self.pre_process.load_vector,
+    #         b_ecsi=self.pre_process.b_ecsi,
+    #     )
+
+    # def n_ecsi(self, ecsi: np.ndarray) -> np.ndarray:
+    #     return self.pre_process.n_ecsi_function(calc_pts_coords=ecsi)
+
+    # def b_ecsi(self, ecsi: np.ndarray) -> np.ndarray:
+    #     return self.pre_process.n_ecsi_function(calc_pts_coords=ecsi)
+
+    # def result_df(self, esci_calc_pts: np.ndarray | None = None):
+    #     if esci_calc_pts is None:
+    #         esci_calc_pts = np.linspace(-1, 1, 21)
+    #     return calc_approx_value(
+    #         x_knots_global=self.pre_process.collocation_pts,
+    #         element_incidence_matrix=self.pre_process.incidence_matrix,
+    #         knot_displacements=self.bar_result.displacements,
+    #         esci_matrix_=self.n_ecsi(esci_calc_pts),
+    #         ecsi_calc_pts=esci_calc_pts,
+    #         factor=1,
+    #         result_name=NUM_DISPLACEMENT,
+    #     )
+
+
+@dataclass
+class C1BarAnalysisInput:
+    bar_input: BarInputNonLiner
+
+    @cached_property
+    def pre_process(self):
+        return c1_pre_processing(
+            length=self.bar_input.length,
+            degree=self.bar_input.degree,
+            n_elements=self.bar_input.n_elements,
+            load_function=self.bar_input.load_function,
+            load_at_end=self.bar_input.load_at_end,
         )
