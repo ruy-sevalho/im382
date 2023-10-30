@@ -13,6 +13,8 @@ class BarInput:
     n_elements: int
     load_function: Callable[[float], float]
 
+
 @dataclass
 class BarInputNonLiner(BarInput):
     poisson: float
+    load_at_end: float

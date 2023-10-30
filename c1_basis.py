@@ -124,6 +124,21 @@ def calc_x_knots_global(
     return np.linspace(0, length, int((n_elements * 2 + 2) / 2))
 
 
+def calc_x_knots_global_complete(
+    length: float,
+    n_elements: int,
+    degree: int,
+):
+    x_knots = calc_x_knots_global(length=length, n_elements=n_elements)
+    x_knots = np.concatenate(
+        [x_knots[i], 0, x_knots[i+1], 0 for i in range(len(x_knots))]
+    )
+    if degree > 3:
+        x_knots = np.concatenate([x_knots, np.zeros((degree-3)*n_elements)])
+    return x_knots    
+    
+
+
 def calc_incidence_matrix(n_elements: int, degree: int):
     incidence_matrix = np.array(
         [np.arange(2 * i, 2 * i + 4) for i in range(n_elements)]

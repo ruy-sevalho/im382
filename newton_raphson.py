@@ -11,9 +11,13 @@ from c0_basis import (
     calc_x_knots_global,
     calc_ecsi_placement_coords_equal_dist,
     calc_load_vector,
+    calc_approx_value,
 )
 from c0_basis import calc_incidence_matrix as calc_incidence_matrix_c0
-from polynomials import d_lagrange_poli, get_points_weights, lagrange_poli
+from c1_basis import calc_incidence_matrix as calc_incidence_matrix_c1
+from c1_basis import calc_x_knots_global as calc_knots_global_c1
+from nomeclature import NUM_DISPLACEMENT
+from polynomials import d_lagrange_poli, get_points_weights, lagrange_poli, c1_basis
 
 
 class ConvergenceCriteria(Enum):
@@ -68,7 +72,7 @@ def newton_raphson(
     conv_measure = 1
 
     disp = np.zeros(n_degrees_freedom)
-    disp_increment = disp
+    disp_increment = np.zeros(n_degrees_freedom)
     load_step_vector = load_vector / n_load_steps
     total_iter_count = 0
     iter_per_load_step = np.zeros(n_load_steps)
@@ -191,7 +195,7 @@ def newton_raphson(
         crit_residue_list=np.array(crit_residue_list),
         crit_comb_list=np.array(crit_comb_list),
         crit_disp_per_step=np.array(crit_comb_per_step),
-        crit_residue_per_step=np.array(crit_residue),
+        crit_residue_per_step=np.array(crit_residue_per_step),
         crit_comb_per_step=np.array(crit_comb_per_step),
     )
 
@@ -209,7 +213,7 @@ def assemble_global_non_linear_stiff_matrix(
 ):
     n_knots = len(collocation_pts)
     n_int_pts = len(int_weights)
-
+    element_degrees_freedom = incidence_matrix.shape[1]
     # Global tangent stiffness matrices
     global_tan_stiff_m = np.zeros((n_knots, n_knots))
 
@@ -222,8 +226,10 @@ def assemble_global_non_linear_stiff_matrix(
 
     for e in range(n_elements):
         # Initializes tangent stiffness and the internal force
-        element_tangent_siff_m = np.zeros((n_elements, n_elements))
-        element_internal_force = np.zeros(n_elements)
+        element_tangent_siff_m = np.zeros(
+            (element_degrees_freedom, element_degrees_freedom)
+        )
+        element_internal_force = np.zeros(element_degrees_freedom)
 
         # Incidence, nodal coordinates and updated nodal coordinates
         elem_incidence = incidence_matrix[e, :]
@@ -264,10 +270,14 @@ def assemble_global_non_linear_stiff_matrix(
             # integration point i
             # Tangent Matrix.
             element_tangent_siff_m += (
-                np.outer(linear_b_ecsi_p_i, piolla_kirc_stress_2_i * linear_b_ecsi_p_i)
-                + np.outer(
-                    non_linear_b_ecsi_p_i,
-                    constitutive_matrix_p_i * non_linear_b_ecsi_p_i,
+                (
+                    np.outer(
+                        linear_b_ecsi_p_i, piolla_kirc_stress_2_i * linear_b_ecsi_p_i
+                    )
+                    + np.outer(
+                        non_linear_b_ecsi_p_i,
+                        constitutive_matrix_p_i * non_linear_b_ecsi_p_i,
+                    )
                 )
                 * int_weights[i]
                 * area
@@ -284,13 +294,11 @@ def assemble_global_non_linear_stiff_matrix(
             )
 
         # Assembles stiffness matrix, the internal force vector, and reaction force vector.
-        for i in range(n_elements):
-            for j in range(n_elements):
-                global_tan_stiff_m[
-                    elem_incidence[i], elem_incidence[j]
-                ] += element_tangent_siff_m[i, j]
-        for i in range(n_elements):
-            internal_force_v[elem_incidence[i]] += element_internal_force[i]
+
+        global_tan_stiff_m[
+            elem_incidence[:, np.newaxis], elem_incidence[np.newaxis, :]
+        ] += element_tangent_siff_m
+        internal_force_v[elem_incidence] += element_internal_force
 
     return global_tan_stiff_m, internal_force_v
 
@@ -312,6 +320,33 @@ class BarNewRaphsonPreProcessing:
     int_weights: np.ndarray
     load_vector: np.ndarray
     b_ecsi: np.ndarray
+    ecsi_placement_pts: np.ndarray
+
+
+# def calc_b_esci_matrixes_and_int_weights_c0(
+#     degree: int,
+#     ecsi_placement_pts_function: Callable[[int], np.ndarray],
+# ):
+#     ecsi_placement_pts = ecsi_placement_pts_function(degree=degree)
+#     integration_points, integration_weights = get_points_weights(
+#         intorder=2 * degree,
+#     )
+#     b_esci = d_lagrange_poli(
+#         degree=degree,
+#         calc_pts_coords=integration_points,
+#         placement_pts_coords=ecsi_placement_pts,
+#     )
+#     return b_esci, integration_weights
+
+
+# def pre_processing(
+#     length: float,
+#     n_elements: int,
+#     load_function: Callable[[float], float],
+#     loat_at_end: float,
+# ):
+#     det_j = calc_element_1D_jacobian(length / n_elements)
+#     return
 
 
 def c0_pre_processing(
@@ -319,12 +354,13 @@ def c0_pre_processing(
     degree: int,
     n_elements: int,
     load_function: Callable[[float], float],
-    x_knots_local_function: Callable[[int], np.ndarray],
+    ecsi_placement_pts_function: Callable[[int], np.ndarray],
+    load_at_end: float,
 ):
     det_j = calc_element_1D_jacobian(length / n_elements)
-    x_knots_local = x_knots_local_function(degree=degree)
+    ecsi_placement_pts = ecsi_placement_pts_function(degree=degree)
     x_knots_global = calc_x_knots_global(
-        length=length, n_elements=n_elements, esci_placement_coords=x_knots_local
+        length=length, n_elements=n_elements, esci_placement_coords=ecsi_placement_pts
     )
     n_degrees_freedom = x_knots_global.shape[0]
     integration_points, integration_weights = get_points_weights(
@@ -333,7 +369,7 @@ def c0_pre_processing(
     b_esci_matrix_at_int_pts = d_lagrange_poli(
         degree=degree,
         calc_pts_coords=integration_points,
-        placement_pts_coords=x_knots_local,
+        placement_pts_coords=ecsi_placement_pts,
     )
     incidence_matrix = calc_incidence_matrix_c0(n_elements=n_elements, degree=degree)
     load_vector = calc_load_vector(
@@ -342,11 +378,57 @@ def c0_pre_processing(
         test_function_local=partial(
             lagrange_poli,
             degree=degree,
-            placement_pts_coords=x_knots_local,
+            placement_pts_coords=ecsi_placement_pts,
         ),
         load_function=load_function,
         intorder=2 * degree + 2,
         det_j=det_j,
+    )
+    load_vector[n_elements] += load_at_end
+    return BarNewRaphsonPreProcessing(
+        det_j=det_j,
+        n_degrees_freedom=n_degrees_freedom,
+        incidence_matrix=incidence_matrix,
+        collocation_pts=x_knots_global,
+        int_weights=integration_weights,
+        load_vector=load_vector,
+        b_ecsi=b_esci_matrix_at_int_pts,
+        ecsi_placement_pts=ecsi_placement_pts,
+    )
+
+
+def c1_pre_processing(
+    length: float,
+    degree: int,
+    n_elements: int,
+    load_function: Callable[[float], float],
+    load_at_end: float,
+):
+    det_j = calc_element_1D_jacobian(length / n_elements)
+    x_knots = calc_knots_global_c1(length=length, n_elements=n_elements)
+    incidence_matrix = calc_incidence_matrix_c1(n_elements=n_elements, degree=degree)
+    n_degrees_freedom = incidence_matrix[-1, -1] + 1
+    integration_points, integration_weights = get_points_weights(
+        intorder=2 * degree,
+    )
+    load_vector = calc_load_vector(
+        x_knots=x_knots,
+        incidence_matrix=incidence_matrix,
+        test_function_local=partial(
+            c1_basis,
+            degree=degree,
+            element_size=length / n_elements,
+            return_derivative_order=0,
+        ),
+        load_function=load_function,
+        intorder=2 * degree + 2,
+        det_j=det_j,
+    )
+    b_esci_matrix_at_int_pts = c1_basis(
+        degree=degree,
+        calc_pts_coords=integration_points,
+        element_size=length / n_elements,
+        return_derivative_order=1,
     )
     return BarNewRaphsonPreProcessing(
         det_j=det_j,
@@ -356,13 +438,14 @@ def c0_pre_processing(
         int_weights=integration_weights,
         load_vector=load_vector,
         b_ecsi=b_esci_matrix_at_int_pts,
+        ecsi_placement_pts=np.array([-1, 1]),
     )
 
 
 @dataclass
 class C0BarAnalysis:
     bar_input: BarInputNonLiner
-    x_knots_local_function: Callable[
+    ecsi_placement_pts_function: Callable[
         [int], np.ndarray
     ] = calc_ecsi_placement_coords_equal_dist
     convergence_crit: NewtonRaphsonConvergenceParam = field(
@@ -376,7 +459,8 @@ class C0BarAnalysis:
             degree=self.bar_input.degree,
             n_elements=self.bar_input.n_elements,
             load_function=self.bar_input.load_function,
-            x_knots_local_function=self.x_knots_local_function,
+            ecsi_placement_pts_function=self.ecsi_placement_pts_function,
+            load_at_end=self.bar_input.load_at_end,
         )
 
     @cached_property
@@ -396,4 +480,39 @@ class C0BarAnalysis:
             int_weights=self.pre_process.int_weights,
             load_vector=self.pre_process.load_vector,
             b_ecsi=self.pre_process.b_ecsi,
+        )
+
+    @cached_property
+    def n_ecsi_function(self) -> Callable[[np.ndarray], np.ndarray]:
+        return partial(
+            lagrange_poli,
+            degree=self.bar_input.degree,
+            placement_pts_coords=self.pre_process.ecsi_placement_pts,
+        )
+
+    @cached_property
+    def b_ecsi_function(self) -> Callable[[np.ndarray], np.ndarray]:
+        return partial(
+            d_lagrange_poli,
+            degree=self.bar_input.degree,
+            placement_pts_coords=self.pre_process.ecsi_placement_pts,
+        )
+
+    def n_ecsi(self, ecsi: np.ndarray):
+        return self.n_ecsi_function(calc_pts_coords=ecsi)
+
+    def b_ecsi(self, ecsi: np.ndarray):
+        return self.n_ecsi_function(calc_pts_coords=ecsi)
+
+    def result_df(self, esci_calc_pts: np.ndarray | None = None):
+        if esci_calc_pts is None:
+            esci_calc_pts = np.linspace(-1, 1, 21)
+        return calc_approx_value(
+            x_knots_global=self.pre_process.collocation_pts,
+            element_incidence_matrix=self.pre_process.incidence_matrix,
+            knot_displacements=self.bar_result.displacements,
+            esci_matrix_=self.n_ecsi(esci_calc_pts),
+            ecsi_calc_pts=esci_calc_pts,
+            factor=1,
+            result_name=NUM_DISPLACEMENT,
         )

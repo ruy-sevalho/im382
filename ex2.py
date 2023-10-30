@@ -14,14 +14,18 @@ from newton_raphson import (
 from nomeclature import NUM_DISPLACEMENT, X_COORD
 
 
+def pe(x: float):
+    print(f"{x:e}")
+
+
 young_modulus = 210e9
 poisson = 0.3
 lame_lambda = calc_lambda(young_modulus=young_modulus, poisson=poisson)
 lame_mu = calc_mu(young_modulus=young_modulus, poisson=poisson)
 section_area = 1.0e-3
 length = 4.0
-degree = 1
-n_elements = 2
+degree = 3
+n_elements = 10
 x = sy.symbols("x")
 p, lambda_, mu, cp, A = sy.symbols("p lambda mu C_p A")
 energy_norm = calc_energy_norm(
@@ -35,6 +39,13 @@ stress_piolla_kirchhoff_2: sy.Expr = (
     mu * (1 - 1 / cp) + lambda_ * sy.ln(sy.sqrt(cp)) / cp
 )
 stress_piolla_kirchhoff_2 = stress_piolla_kirchhoff_2.subs(cp, cauchy_green)
+stress_piolla_kirchhoff_2_num = sy.lambdify(
+    p,
+    stress_piolla_kirchhoff_2.subs(
+        {A: section_area, lambda_: lame_lambda, mu: lame_mu, p: length}
+    ),
+)
+
 stress_piolla_kirchhoff_1 = stress_piolla_kirchhoff_2 * grad_p
 normal_1 = A * stress_piolla_kirchhoff_1
 normal_1 = normal_1.simplify()
@@ -46,6 +57,22 @@ load_at_end = normal_1.subs(
     {A: section_area, lambda_: lame_lambda, mu: lame_mu, p: length}
 )
 
+
+def stress_pk_2_manual(p: float):
+    term = 0.1 * np.cos(p) + 1.2
+    num = np.log(term)
+    den = term**2
+    return lame_lambda * num / den - lame_mu / (den - 1)
+
+
+def stress_1_pk_manual(p: float):
+    return stress_pk_2_manual(p) * (1.2 + 0.1 * np.cos(p))
+
+
+def normal_force_manual(p: float):
+    return stress_1_pk_manual(p) * section_area
+
+
 bar = BarInputNonLiner(
     young_modulus=young_modulus,
     section_area=section_area,
@@ -54,6 +81,7 @@ bar = BarInputNonLiner(
     n_elements=n_elements,
     load_function=dist_load_num,
     poisson=poisson,
+    load_at_end=load_at_end,
 )
 
 convernge_criteria = NewtonRaphsonConvergenceParam(
@@ -66,155 +94,31 @@ convernge_criteria = NewtonRaphsonConvergenceParam(
 analysis = C0BarAnalysis(
     convergence_crit=convernge_criteria,
     bar_input=bar,
-    x_knots_local_function=calc_ecsi_placement_coords_gauss_lobato,
+    ecsi_placement_pts_function=calc_ecsi_placement_coords_gauss_lobato,
 )
 
 res = analysis.bar_result
+crit_res_step = res.crit_residue_per_step
 
 ax: plt.Axes
 fig, ax = plt.subplots()
 
 col_pts = analysis.pre_process.collocation_pts
-
-ax.plot(col_pts, [displacement_analytical_num(pt) for pt in col_pts])
-
-
-# load_at_end_2 = dist_load_2.subs(
-#     {A: section_area, lambda_: lame_lambda, mu: lame_mu, p: length}
-# )
-
-# dist_load = -sy.integrate(normal_1, p)
-# analytical_energy = (
-#     sy.integrate(
-
-#         young_modulus * section_area * sy.diff(displacement_analytical_symb, x) ** 2,
-
-#         (x, 0, length),
-#     )
-
-#     ** 0.5
-
-# ).evalf()
+col_pts_sorted = np.sort(col_pts)
+element_incidence = analysis.pre_process.incidence_matrix
+col_pt_el1 = col_pts[element_incidence[0]]
 
 
-# bar_input_h_study = BarInput(
-#     young_modulus=young_modulus,
-#     section_area=section_area,
+ecsi_pts = analysis.pre_process.ecsi_placement_pts
+ecsi_pts_test = np.linspace(-1, 1, 11)
+n_ecsi = analysis.n_ecsi(ecsi_pts_test)
+ecsi_pts_test_linear_interp = np.interp(ecsi_pts_test, [-1, 1], col_pt_el1[:2])
+p = n_ecsi.T @ col_pt_el1
+res_df = analysis.result_df()
 
-#     length=length,
-
-#     degree=1,
-
-#     n_elements=4,
-#     load_function=load_function,
-# )
-
-
-# bar_input_p_study = BarInput(
-#     young_modulus=young_modulus,
-#     section_area=section_area,
-
-#     length=length,
-
-#     degree=2,
-
-#     n_elements=2,
-#     load_function=load_function,
-# )
-
-
-# n_elements_cases = (4, 6, 8, 10, 12)
-
-# degrees = (2, 3, 4, 5, 6)
-
-# degrees_freedom = (5, 7, 9, 11, 13)
-
-# h_study = dict()
-# p_study = dict()
-
-
-# for n_elements in n_elements_cases:
-
-#     h_study[n_elements] = C0BarAnalysis(
-
-#         input=replace(bar_input_h_study, n_elements=n_elements),
-#         displacement_analytical=displacement_analytical,
-#     )
-
-
-# for degree in degrees:
-
-#     p_study[degree] = C0BarAnalysis(
-
-#         input=replace(bar_input_p_study, degree=degree),
-#         displacement_analytical=displacement_analytical,
-#     )
-
-
-# l2_error_h = tuple(case.l2_error for case in h_study.values())
-
-# energy_h_ = tuple(case.energy_norm_aprox_sol for case in h_study.values())
-
-# energy_diff_h = tuple(
-
-#     analytical_energy - case.energy_norm_aprox_sol for case in h_study.values()
-# )
-
-
-# l2_error_p = tuple(case.l2_error for case in p_study.values())
-# energy_diff_p = tuple(
-
-#     analytical_energy - case.energy_norm_aprox_sol for case in p_study.values()
-# )
-
-
-# fig, ax = plt.subplots()
-
-# energy_h = (0.1405, 0.1419, 0.1421)
-
-# errors_h = (0.0018, 4.5764e-04, 2.0332e-04)
-
-# errors_p = (7.3568e-05, 8.0004e-10, 4.4409e-16)
-
-# ax.loglog(degrees_freedom, energy_diff_h, label="ref h")
-
-# ax.loglog(degrees_freedom, energy_diff_p, label="ref p")
-# fig.legend()
-
-
-# fig2, ax2 = plt.subplots()
-
-
-# ax2.loglog(degrees_freedom, l2_error_h, label="ref h")
-
-# ax2.loglog(degrees_freedom, l2_error_p, label="ref p")
-# fig.legend()
-
-# fig, (strain_plot, disp_plot) = plt.subplots(2, sharex=True)
-
-# disp_plot.set_xlabel("x(m)")
-# strain_plot.plot(
-
-#     results[X_COORD],
-
-#     [strain_analytical(xs) for xs in results[X_COORD]],
-
-#     layel="analitical",
-# )
-
-# strain_plot.plot(results[X_COORD], results[NUM_STRAIN], label="num")
-
-# strain_plot.set_ylabel("strain")
-# disp_plot.plot(
-
-#     results[X_COORD],
-
-#     [displacement_analytical(xs) for xs in results.x],
-
-#     label="analytical",
-# )
-
-# disp_plot.plot(results[X_COORD], results[NUM_DISPLACEMENT], label="num")
-
-# disp_plot.set_ylabel("displacement")
-# fig.legend()
+ax.plot(
+    col_pts_sorted,
+    [displacement_analytical_num(pt) for pt in col_pts_sorted],
+    label="analytical",
+)
+ax.plot(res_df[X_COORD], res_df[NUM_DISPLACEMENT], label="num")

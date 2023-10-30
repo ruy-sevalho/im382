@@ -110,7 +110,7 @@ def calc_x_knots_global(
     length: float, n_elements: int, esci_placement_coords: np.ndarray
 ):
     # eliminating the vertices knots
-    esci_placement_coords = esci_placement_coords[1:-1]
+    esci_placement_coords = esci_placement_coords[2:]
     n_knots_vertices = n_elements + 1
     x_knots = np.linspace(0, length, n_knots_vertices)
     if len(esci_placement_coords):

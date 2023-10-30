@@ -18,7 +18,7 @@ from polynomials import lagrange_poli
     "length, n_elements, esci_internal_knots_coords, expected_knots",
     [
         [1, 5, np.array([-1, 1]), np.array([0.0, 0.2, 0.4, 0.6, 0.8, 1.0])],
-        [1, 2, np.array([-1, 0, 1]), np.array([0.0, 0.5, 1.0, 0.25, 0.75])],
+        [1, 2, np.array([-1, 1, 0]), np.array([0.0, 0.5, 1.0, 0.25, 0.75])],
     ],
 )
 def test_x_knots_global(
