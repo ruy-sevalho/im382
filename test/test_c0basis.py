@@ -682,9 +682,9 @@ def test_load_vector(
     expected_load_vector: np.ndarray,
 ):
     assert calc_load_vector(
-        collocation_pts=x_knots,
+        x_knots=x_knots,
         incidence_matrix=element_incidence_matrix,
-        test_function_local=test_function_local,
+        n_ecsi_function=test_function_local,
         load_function=load_function,
         intorder=intorder,
         det_j=det_j,

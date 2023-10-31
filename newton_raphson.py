@@ -387,7 +387,7 @@ def c0_pre_processing(
     load_vector = calc_load_vector(
         collocation_pts=x_knots_global,
         incidence_matrix=incidence_matrix,
-        test_function_local=n_ecsi_funtion,
+        n_ecsi_function=n_ecsi_funtion,
         load_function=load_function,
         intorder=2 * degree + 2,
         det_j=det_j,
@@ -434,7 +434,7 @@ def c1_pre_processing(
     load_vector = calc_load_vector(
         collocation_pts=p_knots,
         incidence_matrix=incidence_matrix,
-        test_function_local=n_ecsi_function,
+        n_ecsi_function=n_ecsi_function,
         load_function=load_function,
         intorder=2 * degree + 2,
         det_j=det_j,
@@ -510,10 +510,11 @@ class BarAnalysis:
         if esci_calc_pts is None:
             esci_calc_pts = np.linspace(-1, 1, 21)
         return calc_approx_value(
-            p_knots_global=self.pre_process.x_knots_global,
+            x_knots_global=self.pre_process.x_knots_global,
             element_incidence_matrix=self.pre_process.incidence_matrix,
             knot_displacements=self.bar_result.displacements,
-            esci_matrix_=self.n_ecsi(esci_calc_pts),
+            ecsi_matrix=self.n_ecsi(esci_calc_pts),
+            ecsi_calc_pts=esci_calc_pts,
             factor=1,
             result_name=NUM_DISPLACEMENT,
         )

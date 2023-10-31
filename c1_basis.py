@@ -5,17 +5,22 @@ from typing import Callable
 import numpy as np
 import pandas as pd
 from bar_1d import BarInput
-from polynomials import c1_basis
+from polynomials import IntegrationTypes, c1_basis
 
 from c0_basis import (
     calc_element_1D_jacobian,
-    calc_element_stiffness_matrix,
     compose_global_matrix,
+    calc_element_stiffness_matrix,
     calc_load_vector,
 )
 from nomeclature import NUM_DISPLACEMENT, NUM_STRAIN
 from polynomials import get_points_weights
-from post_processing import calc_approx_value, calc_error_squared, calc_l2_error_norm
+from post_processing import (
+    calc_approx_value,
+    calc_error_squared,
+    calc_l2_error_norm,
+    calc_strain_variable_det_j,
+)
 
 
 @dataclass
@@ -28,6 +33,7 @@ class C1BarResults:
     global_stiffness_matrix: np.ndarray
     load_vector: np.ndarray
     knots_displacements: np.ndarray
+    reaction: np.ndarray
 
 
 def c1_bar(
@@ -39,9 +45,7 @@ def c1_bar(
     load_function: Callable[[np.ndarray], np.ndarray],
 ):
     stiffness = young_modulus * section_area
-    x_knots_global = calc_x_knots_global_complete(
-        length=length, n_elements=n_elements, degree=degree
-    )
+    x_knots_global = calc_x_knots_global(length=length, n_elements=n_elements)
     det_j = calc_element_1D_jacobian(length / n_elements)
 
     n_knots_v = n_elements * 2 + 2
@@ -78,7 +82,7 @@ def c1_bar(
         incindence_matrix=incidence_matrix,
     )
     load_vector = calc_load_vector(
-        collocation_pts=x_knots_global,
+        x_knots=x_knots_global,
         incidence_matrix=incidence_matrix,
         test_function_local=partial(
             c1_basis,
@@ -116,6 +120,7 @@ def c1_bar(
         global_stiffness_matrix=global_stiffness_matrix,
         load_vector=load_vector,
         knots_displacements=knots_displcaments,
+        reaction=reaction,
     )
 
 
@@ -177,10 +182,11 @@ class C1BarAnalysis:
             element_size=self.inputs.length / self.inputs.n_elements,
         )
         results = calc_approx_value(
-            p_knots_global=self.bar_result.x_knots_global,
+            x_knots_global=self.bar_result.x_knots_global,
             element_incidence_matrix=self.bar_result.incidence_matrix,
             knot_displacements=self.bar_result.knots_displacements,
-            esci_matrix_=n_ecsi,
+            ecsi_matrix=n_ecsi,
+            ecsi_calc_pts=esci_calc_pts,
             factor=1,
             result_name=NUM_DISPLACEMENT,
         )
@@ -188,11 +194,12 @@ class C1BarAnalysis:
             [
                 results,
                 calc_approx_value(
-                    p_knots_global=self.bar_result.x_knots_global,
+                    x_knots_global=self.bar_result.x_knots_global,
                     element_incidence_matrix=self.bar_result.incidence_matrix,
                     knot_displacements=self.bar_result.knots_displacements,
-                    esci_matrix_=b_ecsi,
-                    factor=self.bar_result.det_j,
+                    ecsi_matrix=b_ecsi,
+                    ecsi_calc_pts=esci_calc_pts,
+                    factor=1 / self.bar_result.det_j,
                     result_name=NUM_STRAIN,
                 )[NUM_STRAIN],
             ],
