@@ -107,7 +107,7 @@ analysis_c1 = BarAnalysis(
 )
 
 
-res = analysis.bar_result
+# res = analysis.bar_result
 # res_c1 = analysis_c1.bar_result
 
 ax: plt.Axes
@@ -146,4 +146,6 @@ ax.plot(
     [displacement_analytical_num(pt) for pt in col_pts_sorted],
     label="analytical",
 )
-ax.plot(res_df[X_COORD], res_df[NUM_DISPLACEMENT], label="num")
+ax.plot(res_df[X_COORD], res_df[NUM_DISPLACEMENT], "rx", label="num")
+fig.set_dpi(1000)
+fig.legend()

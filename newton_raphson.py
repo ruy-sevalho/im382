@@ -410,7 +410,7 @@ def c1_pre_processing(
         c1_basis, degree=degree, element_size=element_size, return_derivative_order=0
     )
     load_vector = calc_load_vector(
-        x_knots=p_knots,
+        x_knots=x_knots_global,
         incidence_matrix=incidence_matrix,
         test_function_local=n_ecsi_function,
         load_function=load_function,
