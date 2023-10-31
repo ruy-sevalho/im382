@@ -385,9 +385,9 @@ def c0_pre_processing(
     )
     incidence_matrix = calc_incidence_matrix_c0(n_elements=n_elements, degree=degree)
     load_vector = calc_load_vector(
-        collocation_pts=x_knots_global,
+        x_knots=x_knots_global,
         incidence_matrix=incidence_matrix,
-        n_ecsi_function=n_ecsi_funtion,
+        test_function_local=n_ecsi_funtion,
         load_function=load_function,
         intorder=2 * degree + 2,
         det_j=det_j,
@@ -432,9 +432,9 @@ def c1_pre_processing(
         c1_basis, degree=degree, element_size=element_size, return_derivative_order=0
     )
     load_vector = calc_load_vector(
-        collocation_pts=p_knots,
+        x_knots=p_knots,
         incidence_matrix=incidence_matrix,
-        n_ecsi_function=n_ecsi_function,
+        test_function_local=n_ecsi_function,
         load_function=load_function,
         intorder=2 * degree + 2,
         det_j=det_j,
