@@ -139,7 +139,7 @@ p = n_ecsi.T @ col_pt_el1
 j = b_ecsi.T @ col_pt_el1
 j_c1 = b_ecsi_c1.T @ col_pt_el1_c1
 p1 = n_ecsi_c1.T @ col_pt_el1_c1
-res_df = analysis.result_df()
+res_df = analysis_c1.result_df()
 
 ax.plot(
     col_pts_sorted,

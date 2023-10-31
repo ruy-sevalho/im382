@@ -54,6 +54,7 @@ def newton_raphson(
     int_weights: np.ndarray,
     load_vector: np.ndarray,
     b_ecsi: np.ndarray,
+    det_j: float,
 ):
     """Newton Raphson Method for 1D bar"""
 
@@ -97,6 +98,7 @@ def newton_raphson(
                 young_modulus=young_modulus,
                 poisson=poisson,
                 area=area,
+                det_j=det_j,
             )
         residue = residue_init - internal_load_vector
 
@@ -142,6 +144,7 @@ def newton_raphson(
                 young_modulus=young_modulus,
                 poisson=poisson,
                 area=area,
+                det_j=det_j,
             )
             residue = residue_init - internal_load_vector
             # Check convergence:
@@ -212,6 +215,7 @@ def assemble_global_non_linear_stiff_matrix(
     young_modulus: float,
     poisson: float,
     area: float,
+    det_j: float,
 ):
     n_knots = len(collocation_pts)
     n_int_pts = len(int_weights)
@@ -242,7 +246,7 @@ def assemble_global_non_linear_stiff_matrix(
         for i in range(n_int_pts):
             # Jacobian matrix of the initial and current configurations on
             # integration point i
-            jacobian_p_i = np.dot(b_ecsi[:, i], element_p_coords)
+            jacobian_p_i = det_j  # np.dot(b_ecsi[:, i], element_p_coords)
             jacobian_x_i = np.dot(b_ecsi[:, i], element_x_coords)
 
             # Computes the tensor of deformation gradient on integration point i
@@ -325,32 +329,6 @@ class BarNewRaphsonPreProcessing:
     b_ecsi: np.ndarray
     n_ecsi_function: Callable[[np.ndarray], np.ndarray]
     b_ecsi_function: Callable[[np.ndarray], np.ndarray]
-
-
-# def calc_b_esci_matrixes_and_int_weights_c0(
-#     degree: int,
-#     ecsi_placement_pts_function: Callable[[int], np.ndarray],
-# ):
-#     ecsi_placement_pts = ecsi_placement_pts_function(degree=degree)
-#     integration_points, integration_weights = get_points_weights(
-#         intorder=2 * degree,
-#     )
-#     b_esci = d_lagrange_poli(
-#         degree=degree,
-#         calc_pts_coords=integration_points,
-#         placement_pts_coords=ecsi_placement_pts,
-#     )
-#     return b_esci, integration_weights
-
-
-# def pre_processing(
-#     length: float,
-#     n_elements: int,
-#     load_function: Callable[[float], float],
-#     loat_at_end: float,
-# ):
-#     det_j = calc_element_1D_jacobian(length / n_elements)
-#     return
 
 
 def c0_pre_processing(
@@ -498,6 +476,7 @@ class BarAnalysis:
             int_weights=self.pre_process.int_weights,
             load_vector=self.pre_process.load_vector,
             b_ecsi=self.pre_process.b_ecsi,
+            det_j=self.pre_process.det_j,
         )
 
     def n_ecsi(self, ecsi: np.ndarray) -> np.ndarray:
