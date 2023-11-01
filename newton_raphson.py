@@ -1,10 +1,11 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict
 from typing import Protocol
 from enum import Enum
 from functools import cached_property, partial
 from logging import warning
 from typing import Callable
 import numpy as np
+import pandas as pd
 
 from bar_1d import BarInput, BarInputNonLiner
 from c0_basis import (
@@ -246,7 +247,7 @@ def assemble_global_non_linear_stiff_matrix(
         for i in range(n_int_pts):
             # Jacobian matrix of the initial and current configurations on
             # integration point i
-            jacobian_p_i = det_j  # np.dot(b_ecsi[:, i], element_p_coords)
+            jacobian_p_i = np.dot(b_ecsi[:, i], element_p_coords)
             jacobian_x_i = np.dot(b_ecsi[:, i], element_x_coords)
 
             # Computes the tensor of deformation gradient on integration point i

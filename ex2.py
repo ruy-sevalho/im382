@@ -1,3 +1,4 @@
+from dataclasses import asdict
 import numpy as np
 import sympy as sy
 import matplotlib.pyplot as plt
@@ -149,3 +150,12 @@ ax.plot(
 ax.plot(res_df[X_COORD], res_df[NUM_DISPLACEMENT], "rx", label="num")
 fig.set_dpi(1000)
 fig.legend()
+
+
+criteria = analysis_c1.bar_result
+crit_disp_per_step = criteria.crit_disp_per_step
+crit_residue_per_step = criteria.crit_residue_per_step
+crit_comb_per_step = criteria.crit_residue_per_step
+crit_disp_list = criteria.crit_disp_list
+crit_residue_list = criteria.crit_residue_list
+crit_comb_list = criteria.crit_comb_list
