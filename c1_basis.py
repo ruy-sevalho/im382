@@ -137,7 +137,7 @@ def calc_x_knots_global_complete(
     degree: int,
 ):
     x_knots = calc_x_knots_global(length=length, n_elements=n_elements)
-    x_knots = np.concatenate([[x, 0] for x in x_knots])
+    x_knots = np.concatenate([[x, 1] for x in x_knots])
     if degree > 3:
         x_knots = np.concatenate([x_knots, np.zeros((degree - 3) * n_elements)])
     return x_knots
