@@ -326,7 +326,9 @@ class BarNewRaphsonPreProcessing:
     collocation_pts: np.ndarray
     x_knots_global: np.ndarray
     int_weights: np.ndarray
+    ecsi_int_pts_coords: np.ndarray
     load_vector: np.ndarray
+    n_ecsi: np.ndarray
     b_ecsi: np.ndarray
     n_ecsi_function: Callable[[np.ndarray], np.ndarray]
     b_ecsi_function: Callable[[np.ndarray], np.ndarray]
@@ -379,7 +381,9 @@ def c0_pre_processing(
         collocation_pts=x_knots_global,
         x_knots_global=x_knots_global,
         int_weights=integration_weights,
+        ecsi_int_pts_coords=integration_points,
         load_vector=load_vector,
+        n_ecsi=n_ecsi_funtion(calc_pts_coords=integration_points),
         b_ecsi=b_esci_matrix_at_int_pts,
         n_ecsi_function=n_ecsi_funtion,
         b_ecsi_function=b_esci_matrix_function,
@@ -429,7 +433,9 @@ def c1_pre_processing(
         collocation_pts=p_knots,
         x_knots_global=x_knots_global,
         int_weights=integration_weights,
+        ecsi_int_pts_coords=integration_points,
         load_vector=load_vector,
+        n_ecsi=n_ecsi_function(calc_pts_coords=integration_points),
         b_ecsi=b_esci_matrix_at_int_pts,
         b_ecsi_function=b_ecsi_function,
         n_ecsi_function=n_ecsi_function,
@@ -448,6 +454,8 @@ class BarAnalysisInput(Protocol):
 @dataclass
 class BarAnalysis:
     inputs: BarAnalysisInput
+    analytical_solution_function: Callable[[np.ndarray], np.ndarray]
+    analytical_derivative_solution_function: Callable[[np.ndarray], np.ndarray]
     convergence_crit: NewtonRaphsonConvergenceParam = field(
         default_factory=NewtonRaphsonConvergenceParam
     )
@@ -499,6 +507,20 @@ class BarAnalysis:
             result_name=NUM_DISPLACEMENT,
         )
 
+    @cached_property
+    def error_norms(self):
+        return calc_l2_h1_error_norms(
+            analytical_solution_function=self.analytical_solution_function,
+            analytical_derivative_solution_function=self.analytical_derivative_solution_function,
+            p_init_global_coords=self.pre_process.collocation_pts,
+            knot_displacements=self.bar_result.displacements,
+            intergration_weights=self.pre_process.int_weights,
+            n_ecsi=self.pre_process.n_ecsi,
+            b_ecsi=self.pre_process.b_ecsi,
+            incidence_matrix=self.pre_process.incidence_matrix,
+            det_j=self.pre_process.det_j,
+        )
+
 
 @dataclass
 class C0BarAnalysisInput:
@@ -506,9 +528,6 @@ class C0BarAnalysisInput:
     ecsi_placement_pts_function: Callable[
         [int], np.ndarray
     ] = calc_ecsi_placement_coords_equal_dist
-    # convergence_crit: NewtonRaphsonConvergenceParam = field(
-    #     default_factory=NewtonRaphsonConvergenceParam
-    # )
 
     @cached_property
     def pre_process(self):
@@ -520,44 +539,6 @@ class C0BarAnalysisInput:
             ecsi_placement_pts_function=self.ecsi_placement_pts_function,
             load_at_end=self.bar_input.load_at_end,
         )
-
-    # @cached_property
-    # def bar_result(self):
-    #     return newton_raphson(
-    #         n_load_steps=self.convergence_crit.n_load_steps,
-    #         max_iterations=self.convergence_crit.max_iterations,
-    #         convergence_criteria=self.convergence_crit.convergence_criteria,
-    #         precision=self.convergence_crit.precision,
-    #         young_modulus=self.bar_input.young_modulus,
-    #         poisson=self.bar_input.poisson,
-    #         area=self.bar_input.section_area,
-    #         n_elements=self.bar_input.n_elements,
-    #         n_degrees_freedom=self.pre_process.n_degrees_freedom,
-    #         incidence_matrix=self.pre_process.incidence_matrix,
-    #         collocation_pts=self.pre_process.collocation_pts,
-    #         int_weights=self.pre_process.int_weights,
-    #         load_vector=self.pre_process.load_vector,
-    #         b_ecsi=self.pre_process.b_ecsi,
-    #     )
-
-    # def n_ecsi(self, ecsi: np.ndarray) -> np.ndarray:
-    #     return self.pre_process.n_ecsi_function(calc_pts_coords=ecsi)
-
-    # def b_ecsi(self, ecsi: np.ndarray) -> np.ndarray:
-    #     return self.pre_process.n_ecsi_function(calc_pts_coords=ecsi)
-
-    # def result_df(self, esci_calc_pts: np.ndarray | None = None):
-    #     if esci_calc_pts is None:
-    #         esci_calc_pts = np.linspace(-1, 1, 21)
-    #     return calc_approx_value(
-    #         x_knots_global=self.pre_process.collocation_pts,
-    #         element_incidence_matrix=self.pre_process.incidence_matrix,
-    #         knot_displacements=self.bar_result.displacements,
-    #         esci_matrix_=self.n_ecsi(esci_calc_pts),
-    #         ecsi_calc_pts=esci_calc_pts,
-    #         factor=1,
-    #         result_name=NUM_DISPLACEMENT,
-    #     )
 
 
 @dataclass
@@ -573,3 +554,53 @@ class C1BarAnalysisInput:
             load_function=self.bar_input.load_function,
             load_at_end=self.bar_input.load_at_end,
         )
+
+
+@dataclass
+class EnerergyNormsAndErrors:
+    l2_error_norm: float
+    l2_sol_norm: float
+    h1_error_norm: float
+    h1_sol_norm: float
+
+
+def calc_l2_h1_error_norms(
+    analytical_solution_function: Callable[[np.ndarray], np.ndarray],
+    analytical_derivative_solution_function: Callable[[np.ndarray], np.ndarray],
+    p_init_global_coords: np.ndarray,
+    knot_displacements: np.ndarray,
+    intergration_weights: np.ndarray,
+    n_ecsi: np.ndarray,
+    b_ecsi: np.ndarray,
+    incidence_matrix: np.ndarray,
+    det_j: float,
+):
+    l2_error_norm = 0
+    l2_sol_norm = 0
+    h1_error_norm = 0
+    h1_sol_norm = 0
+
+    for e in incidence_matrix:
+        element_displacements = knot_displacements[e]
+        x_element = n_ecsi.T @ p_init_global_coords[e]
+        analitycal_displacement = analytical_solution_function(x_element)
+        analytical_derivative = analytical_derivative_solution_function(x_element)
+        num_displacement = n_ecsi.T @ element_displacements
+        num_derivative = b_ecsi.T @ element_displacements / det_j
+        l2_error_norm += np.sum(
+            (analitycal_displacement - num_displacement) ** 2
+            * intergration_weights
+            * det_j
+        )
+        l2_sol_norm += np.sum(num_displacement**2 * det_j * intergration_weights)
+        h1_error_norm += np.sum(
+            (analytical_derivative - num_derivative) ** 2 * det_j * intergration_weights
+        )
+        h1_sol_norm += np.sum(num_derivative**2 * det_j * intergration_weights)
+
+    return EnerergyNormsAndErrors(
+        l2_error_norm=l2_error_norm**0.5,
+        l2_sol_norm=l2_sol_norm**0.5,
+        h1_error_norm=h1_error_norm**0.5,
+        h1_sol_norm=h1_sol_norm**0.5,
+    )

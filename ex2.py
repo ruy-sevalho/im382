@@ -36,7 +36,11 @@ energy_norm = calc_energy_norm(
 )
 displacement_analytical_symb = 0.2 * p + 0.1 * sy.sin(p)  # type: ignore
 displacement_analytical_num = sy.lambdify(p, displacement_analytical_symb)
-grad_p = 1 + sy.diff(displacement_analytical_symb, p)
+derivative_displacement_analytical_symb = sy.diff(displacement_analytical_symb, p)
+derivative_displacement_analytical_num = sy.lambdify(
+    p, derivative_displacement_analytical_symb
+)
+grad_p = 1 + derivative_displacement_analytical_symb
 cauchy_green = grad_p**2
 stress_piolla_kirchhoff_2: sy.Expr = (
     mu * (1 - 1 / cp) + lambda_ * sy.ln(sy.sqrt(cp)) / cp
@@ -80,6 +84,17 @@ bar = BarInputNonLiner(
     young_modulus=young_modulus,
     section_area=section_area,
     length=length,
+    degree=1,
+    n_elements=n_elements,
+    load_function=dist_load_num,
+    poisson=poisson,
+    load_at_end=load_at_end,
+)
+
+bar_c1 = BarInputNonLiner(
+    young_modulus=young_modulus,
+    section_area=section_area,
+    length=length,
     degree=degree,
     n_elements=n_elements,
     load_function=dist_load_num,
@@ -99,17 +114,18 @@ analysis = BarAnalysis(
         bar_input=bar,
         ecsi_placement_pts_function=calc_ecsi_placement_coords_gauss_lobato,
     ),
+    analytical_solution_function=displacement_analytical_num,
+    analytical_derivative_solution_function=derivative_displacement_analytical_num,
     convergence_crit=convernge_criteria,
 )
 
 analysis_c1 = BarAnalysis(
-    inputs=C1BarAnalysisInput(bar_input=bar),
+    inputs=C1BarAnalysisInput(bar_input=bar_c1),
     convergence_crit=convernge_criteria,
+    analytical_solution_function=displacement_analytical_num,
+    analytical_derivative_solution_function=derivative_displacement_analytical_num,
 )
 
-
-# res = analysis.bar_result
-# res_c1 = analysis_c1.bar_result
 
 ax: plt.Axes
 fig, ax = plt.subplots()
@@ -140,14 +156,19 @@ p = n_ecsi.T @ col_pt_el1
 j = b_ecsi.T @ col_pt_el1
 j_c1 = b_ecsi_c1.T @ col_pt_el1_c1
 p1 = n_ecsi_c1.T @ col_pt_el1_c1
-res_df = analysis_c1.result_df()
+res_df_c0 = analysis.result_df()
+res_df_c1 = analysis_c1.result_df()
+errors_c0 = analysis.error_norms
+errors_c1 = analysis_c1.error_norms
+
 
 ax.plot(
     col_pts_sorted,
     [displacement_analytical_num(pt) for pt in col_pts_sorted],
     label="analytical",
 )
-ax.plot(res_df[X_COORD], res_df[NUM_DISPLACEMENT], "rx", label="num")
+ax.plot(res_df_c0[X_COORD], res_df_c0[NUM_DISPLACEMENT], label="C0")
+ax.plot(res_df_c1[X_COORD], res_df_c1[NUM_DISPLACEMENT], label="C0")
 fig.set_dpi(1000)
 fig.legend()
 
@@ -159,3 +180,9 @@ crit_comb_per_step = criteria.crit_residue_per_step
 crit_disp_list = criteria.crit_disp_list
 crit_residue_list = criteria.crit_residue_list
 crit_comb_list = criteria.crit_comb_list
+
+
+print(f"c0 h1: {errors_c0.h1_error_norm}")
+print(f"c0 l2: {errors_c0.l2_error_norm}")
+print(f"c1 h1: {errors_c1.h1_error_norm}")
+print(f"c1 l2: {errors_c1.l2_error_norm}")
