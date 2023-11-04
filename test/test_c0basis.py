@@ -2,6 +2,7 @@ from functools import partial
 from typing import Callable
 import pytest as pt
 import numpy as np
+import numpy.typing as npt
 from c0_basis import (
     c0_bar,
     calc_incidence_matrix,
@@ -24,8 +25,8 @@ from polynomials import lagrange_poli
 def test_x_knots_global(
     length: float,
     n_elements: int,
-    esci_internal_knots_coords: np.ndarray,
-    expected_knots: np.ndarray,
+    esci_internal_knots_coords: npt.NDArray,
+    expected_knots: npt.NDArray,
 ):
     assert calc_x_knots_global(
         length=length,
@@ -612,9 +613,9 @@ def test_incidence_matrix(n_elements: int, degree: int, expected_matrix: np.arra
     ),
 )
 def test_assembly_global_stiffeness(
-    element_stiffeness_matrix: np.ndarray,
-    incidence_matrix: np.ndarray,
-    expected_global_stiffeness: np.ndarray,
+    element_stiffeness_matrix: npt.NDArray,
+    incidence_matrix: npt.NDArray,
+    expected_global_stiffeness: npt.NDArray,
 ):
     assert compose_global_matrix(
         element_stiffness_matrix=element_stiffeness_matrix,
@@ -673,13 +674,13 @@ def test_assembly_global_stiffeness(
     ),
 )
 def test_load_vector(
-    x_knots: np.ndarray,
-    element_incidence_matrix: np.ndarray,
-    test_function_local: Callable[[np.ndarray], np.ndarray],
-    load_function: Callable[[np.ndarray], float],
+    x_knots: npt.NDArray,
+    element_incidence_matrix: npt.NDArray,
+    test_function_local: Callable[[npt.NDArray], npt.NDArray],
+    load_function: Callable[[npt.NDArray], float],
     intorder: int,
     det_j: float,
-    expected_load_vector: np.ndarray,
+    expected_load_vector: npt.NDArray,
 ):
     assert calc_load_vector(
         x_knots=x_knots,

@@ -1,5 +1,6 @@
 from dataclasses import replace
 import numpy as np
+import numpy.typing as npt
 import sympy as sy
 import matplotlib.pyplot as plt
 from bar_1d import BarInput
@@ -19,7 +20,7 @@ n_elements = 2
 x = sy.symbols("x")
 
 
-def load_function(x: np.ndarray) -> np.ndarray:
+def load_function(x: npt.NDArray) -> npt.NDArray:
     return 1000 * np.sin(np.pi / 2 * x)
 
 

@@ -1,4 +1,5 @@
 import numpy as np
+import numpy.typing as npt
 from polynomials import c1_basis
 import pytest as pt
 
@@ -48,7 +49,7 @@ import pytest as pt
 def test_c1basis(
     degree: float,
     element_size: float,
-    coords: np.ndarray,
+    coords: npt.NDArray,
     shape_f,
     shape_f_1d,
     shape_f_2d,

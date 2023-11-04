@@ -3,6 +3,7 @@ from functools import cached_property, partial
 from typing import Callable
 
 import numpy as np
+import numpy.typing as npt
 import pandas as pd
 from bar_1d import BarInput
 from polynomials import IntegrationTypes, c1_basis
@@ -26,14 +27,14 @@ from post_processing import (
 @dataclass
 class C1BarResults:
     det_j: float
-    x_knots_global: np.ndarray
+    x_knots_global: npt.NDArray
     n_degrees_freedom: int
-    element_stiffness_matrix: np.ndarray
-    incidence_matrix: np.ndarray
-    global_stiffness_matrix: np.ndarray
-    load_vector: np.ndarray
-    knots_displacements: np.ndarray
-    reaction: np.ndarray
+    element_stiffness_matrix: npt.NDArray
+    incidence_matrix: npt.NDArray
+    global_stiffness_matrix: npt.NDArray
+    load_vector: npt.NDArray
+    knots_displacements: npt.NDArray
+    reaction: npt.NDArray
 
 
 def c1_bar(
@@ -42,7 +43,7 @@ def c1_bar(
     length: float,
     degree: int,
     n_elements: int,
-    load_function: Callable[[np.ndarray], np.ndarray],
+    load_function: Callable[[npt.NDArray], npt.NDArray],
 ):
     stiffness = young_modulus * section_area
     x_knots_global = calc_x_knots_global(length=length, n_elements=n_elements)
@@ -167,7 +168,7 @@ def calc_incidence_matrix(n_elements: int, degree: int):
 @dataclass
 class C1BarAnalysis:
     inputs: BarInput
-    displacement_analytical: Callable[[np.ndarray], np.ndarray]
+    displacement_analytical: Callable[[npt.NDArray], npt.NDArray]
 
     @cached_property
     def bar_result(self):

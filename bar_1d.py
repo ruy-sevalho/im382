@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import Callable
 
 import numpy as np
+import numpy.typing as npt
 
 
 @dataclass
@@ -11,7 +12,7 @@ class BarInput:
     length: float
     degree: int
     n_elements: int
-    load_function: Callable[[np.ndarray], np.ndarray]
+    load_function: Callable[[npt.NDArray], npt.NDArray]
 
 
 @dataclass

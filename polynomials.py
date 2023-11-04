@@ -2,9 +2,10 @@ from typing import Any
 import math
 from enum import Enum
 import numpy as np
+import numpy.typing as npt
 
 
-def jacobi_polynomials(r: np.ndarray, m: int, alfa: float, beta: float) -> np.ndarray:
+def jacobi_polynomials(r: npt.NDArray, m: int, alfa: float, beta: float) -> npt.NDArray:
     # Two initial terms of the recurrence relation
     Pn = 1
     Pn1 = 0.5 * (alfa - beta + (alfa + beta + 2) * r)
@@ -33,7 +34,9 @@ def jacobi_polynomials(r: np.ndarray, m: int, alfa: float, beta: float) -> np.nd
     return Pm
 
 
-def D_jacobi_polynomials(r: np.ndarray, m: int, alfa: float, beta: float) -> np.ndarray:
+def D_jacobi_polynomials(
+    r: npt.NDArray, m: int, alfa: float, beta: float
+) -> npt.NDArray:
     # Jacobi polynomials calculated at point r
     Pn = 1
     Pn1 = 0.5 * (alfa - beta + (alfa + beta + 2) * r)
@@ -268,7 +271,7 @@ def get_points_weights(
     intorder: int = 1,
     type_int: IntegrationTypes = IntegrationTypes.GJ,
     coordinate: str = "x",
-) -> tuple[np.ndarray, np.ndarray]:
+) -> tuple[npt.NDArray, npt.NDArray]:
     table = {
         IntegrationTypes.GJ: quadrature_gauss_jacobi,
         IntegrationTypes.GHJ: quadrature_gauss_radau_jacobi,
@@ -283,7 +286,7 @@ def get_points_weights_degree(
     intorder: int = 1,
     type_int: IntegrationTypes = IntegrationTypes.GJ,
     coordinate: str = "x",
-) -> tuple[np.ndarray, np.ndarray]:
+) -> tuple[npt.NDArray, npt.NDArray]:
     table = {
         IntegrationTypes.GJ: quadrature_gauss_jacobi_n_pts,
         IntegrationTypes.GHJ: quadrature_gauss_radau_jacobi_n_pts,
@@ -293,9 +296,9 @@ def get_points_weights_degree(
 
 
 def lagrange_poli(
-    calc_pts_coords: np.ndarray,
+    calc_pts_coords: npt.NDArray,
     degree: int,
-    placement_pts_coords: np.ndarray,
+    placement_pts_coords: npt.NDArray,
 ):
     # Initialization and variable allocation
     m = degree + 1
@@ -322,8 +325,8 @@ def lagrange_poli(
 
 
 def d_lagrange_poli(
-    calc_pts_coords: np.ndarray,
-    placement_pts_coords: np.ndarray,
+    calc_pts_coords: npt.NDArray,
+    placement_pts_coords: npt.NDArray,
     degree: int,
 ):
     # Initialization and variable allocation
@@ -347,11 +350,11 @@ def d_lagrange_poli(
 
 
 def c1_basis(
-    calc_pts_coords: np.ndarray,
+    calc_pts_coords: npt.NDArray,
     degree: int,
     element_size: float,
     return_derivative_order: int | None = None,
-) -> np.ndarray | tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+) -> npt.NDArray | tuple[npt.NDArray, npt.NDArray, npt.NDArray, npt.NDArray]:
     n_integ_pts = len(calc_pts_coords)
 
     # Jacobi polynomials and derivatives on the integ points calculated using

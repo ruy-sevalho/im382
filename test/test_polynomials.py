@@ -1,5 +1,6 @@
 from functools import partial
 import numpy as np
+import numpy.typing as npt
 import sympy as sp
 import pytest as pt
 from polynomials import (
@@ -30,8 +31,8 @@ def test_get_points_weight(
     intorder: int,
     type_int: IntegrationTypes,
     coordinate,
-    x_expected: np.ndarray,
-    w_expected: np.ndarray,
+    x_expected: npt.NDArray,
+    w_expected: npt.NDArray,
 ):
     assert np.array(
         get_points_weights(
@@ -114,8 +115,8 @@ def test_gauss_langrange_quadrature_on_polynomial(power: int):
 )
 def test_lagrange_poli(
     degree: int,
-    pi_coords: np.ndarray,
-    pc_coords: np.ndarray,
+    pi_coords: npt.NDArray,
+    pc_coords: npt.NDArray,
     expected_phi,
 ):
     assert lagrange_poli(
@@ -136,8 +137,8 @@ def test_lagrange_poli(
 )
 def test_d_lagrange_poli(
     degree: int,
-    pi_coords: np.ndarray,
-    pc_coords: np.ndarray,
+    pi_coords: npt.NDArray,
+    pc_coords: npt.NDArray,
     expected_dphi,
 ):
     assert d_lagrange_poli(

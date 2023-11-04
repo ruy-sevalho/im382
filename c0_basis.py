@@ -1,7 +1,8 @@
 from dataclasses import asdict, dataclass
-from functools import cached_property, lru_cache, partial
+from functools import cached_property, partial
 from typing import Callable
 import numpy as np
+import numpy.typing as npt
 import pandas as pd
 from bar_1d import BarInput
 from nomeclature import NUM_DISPLACEMENT, NUM_STRAIN, X_COORD
@@ -25,14 +26,14 @@ from post_processing import (
 @dataclass
 class C0BarResults:
     det_j: float
-    ecsi_knots_local: np.ndarray
-    x_knots_global: np.ndarray
+    ecsi_knots_local: npt.NDArray
+    x_knots_global: npt.NDArray
     n_degrees_freedom: int
-    element_stiffness_matrix: np.ndarray
-    incidence_matrix: np.ndarray
-    global_stiffness_matrix: np.ndarray
-    load_vector: np.ndarray
-    knots_displacements: np.ndarray
+    element_stiffness_matrix: npt.NDArray
+    incidence_matrix: npt.NDArray
+    global_stiffness_matrix: npt.NDArray
+    load_vector: npt.NDArray
+    knots_displacements: npt.NDArray
 
 
 def c0_bar(
@@ -41,8 +42,8 @@ def c0_bar(
     length: float,
     degree: int,
     n_elements: int,
-    load_function: Callable[[np.ndarray], np.ndarray],
-    ecsi_placement_coords_function: Callable[[int], np.ndarray],
+    load_function: Callable[[npt.NDArray], npt.NDArray],
+    ecsi_placement_coords_function: Callable[[int], npt.NDArray],
 ):
     """Returns the stiffness matrix, the load vector and knot displacement of a axially loaded bar"""
     stiffness = young_modulus * section_area
@@ -112,7 +113,7 @@ def c0_bar(
 
 
 def calc_x_knots_global(
-    length: float, n_elements: int, esci_placement_coords: np.ndarray
+    length: float, n_elements: int, esci_placement_coords: npt.NDArray
 ):
     # eliminating the vertices knots
     esci_placement_coords = esci_placement_coords[2:]
@@ -134,11 +135,11 @@ def calc_x_knots_global(
     return x_knots
 
 
-def calc_ecsi_placement_coords_equal_dist(degree: int) -> np.ndarray:
+def calc_ecsi_placement_coords_equal_dist(degree: int) -> npt.NDArray:
     return np.concatenate(((-1.0, 1.0), np.linspace(-1, 1, degree + 1)[1:-1]))
 
 
-def calc_ecsi_placement_coords_gauss_lobato(degree: int) -> np.ndarray:
+def calc_ecsi_placement_coords_gauss_lobato(degree: int) -> npt.NDArray:
     pts, _ = get_points_weights_degree(
         intorder=degree + 1, type_int=IntegrationTypes.GLJ
     )
@@ -148,8 +149,8 @@ def calc_ecsi_placement_coords_gauss_lobato(degree: int) -> np.ndarray:
 
 def calc_element_stiffness_matrix(
     stiffness: float,
-    b_esci_matrix: np.ndarray,
-    int_weights: np.ndarray,
+    b_esci_matrix: npt.NDArray,
+    int_weights: npt.NDArray,
     det_j: float,
 ):
     return (
@@ -162,7 +163,7 @@ def calc_element_stiffness_matrix(
 
 
 def compose_global_matrix(
-    element_stiffness_matrix: np.ndarray, incindence_matrix: np.ndarray
+    element_stiffness_matrix: npt.NDArray, incindence_matrix: npt.NDArray
 ):
     n_knots = incindence_matrix[-1, -1] + 1
     stiffness_matrix = np.zeros((n_knots, n_knots))
@@ -185,9 +186,9 @@ def calc_incidence_matrix(n_elements: int, degree: int):
 
 
 def calc_load_vector(
-    x_knots: np.ndarray,
-    incidence_matrix: np.ndarray,
-    test_function_local: Callable[[np.ndarray], np.ndarray],
+    x_knots: npt.NDArray,
+    incidence_matrix: npt.NDArray,
+    test_function_local: Callable[[npt.NDArray], npt.NDArray],
     load_function: Callable[[float], float],
     intorder: int,
     det_j: float,
@@ -212,10 +213,10 @@ def calc_load_vector(
 
 
 def calc_load_vector_isop(
-    collocation_pts: np.ndarray,
-    incidence_matrix: np.ndarray,
-    n_ecsi_function: Callable[[np.ndarray], np.ndarray],
-    load_function: Callable[[np.ndarray], np.ndarray],
+    collocation_pts: npt.NDArray,
+    incidence_matrix: npt.NDArray,
+    n_ecsi_function: Callable[[npt.NDArray], npt.NDArray],
+    load_function: Callable[[npt.NDArray], npt.NDArray],
     intorder: int,
     det_j: float,
 ):
@@ -242,9 +243,9 @@ def calc_element_1D_jacobian(element_size: float):
 @dataclass
 class C0BarAnalysis:
     inputs: BarInput
-    displacement_analytical: Callable[[np.ndarray], np.ndarray]
+    displacement_analytical: Callable[[npt.NDArray], npt.NDArray]
     ecsi_placement_coords_function: Callable[
-        [int], np.ndarray
+        [int], npt.NDArray
     ] = calc_ecsi_placement_coords_equal_dist
 
     @cached_property

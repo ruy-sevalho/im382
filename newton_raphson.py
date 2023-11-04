@@ -5,6 +5,7 @@ from functools import cached_property, partial
 from logging import warning
 from typing import Callable
 import numpy as np
+import numpy.typing as npt
 import pandas as pd
 
 from bar_1d import BarInput, BarInputNonLiner
@@ -31,13 +32,13 @@ class ConvergenceCriteria(Enum):
 
 @dataclass
 class NewtonRaphsonResults:
-    displacements: np.ndarray
-    crit_disp_list: np.ndarray
-    crit_residue_list: np.ndarray
-    crit_comb_list: np.ndarray
-    crit_disp_per_step: np.ndarray
-    crit_residue_per_step: np.ndarray
-    crit_comb_per_step: np.ndarray
+    displacements: npt.NDArray
+    crit_disp_list: npt.NDArray
+    crit_residue_list: npt.NDArray
+    crit_comb_list: npt.NDArray
+    crit_disp_per_step: npt.NDArray
+    crit_residue_per_step: npt.NDArray
+    crit_comb_per_step: npt.NDArray
 
 
 def newton_raphson(
@@ -50,11 +51,11 @@ def newton_raphson(
     area: float,
     n_elements: int,
     n_degrees_freedom: int,
-    incidence_matrix: np.ndarray,
-    collocation_pts: np.ndarray,
-    int_weights: np.ndarray,
-    load_vector: np.ndarray,
-    b_ecsi: np.ndarray,
+    incidence_matrix: npt.NDArray,
+    collocation_pts: npt.NDArray,
+    int_weights: npt.NDArray,
+    load_vector: npt.NDArray,
+    b_ecsi: npt.NDArray,
     det_j: float,
 ):
     """Newton Raphson Method for 1D bar"""
@@ -208,11 +209,11 @@ def newton_raphson(
 
 def assemble_global_non_linear_stiff_matrix(
     n_elements: int,
-    collocation_pts: np.ndarray,
-    incidence_matrix: np.ndarray,
-    displacements: np.ndarray,
-    b_ecsi: np.ndarray,
-    int_weights: np.ndarray,
+    collocation_pts: npt.NDArray,
+    incidence_matrix: npt.NDArray,
+    displacements: npt.NDArray,
+    b_ecsi: npt.NDArray,
+    int_weights: npt.NDArray,
     young_modulus: float,
     poisson: float,
     area: float,
@@ -322,24 +323,24 @@ class NewtonRaphsonConvergenceParam:
 class BarNewRaphsonPreProcessing:
     det_j: float
     n_degrees_freedom: int
-    incidence_matrix: np.ndarray
-    collocation_pts: np.ndarray
-    x_knots_global: np.ndarray
-    int_weights: np.ndarray
-    ecsi_int_pts_coords: np.ndarray
-    load_vector: np.ndarray
-    n_ecsi: np.ndarray
-    b_ecsi: np.ndarray
-    n_ecsi_function: Callable[[np.ndarray], np.ndarray]
-    b_ecsi_function: Callable[[np.ndarray], np.ndarray]
+    incidence_matrix: npt.NDArray
+    collocation_pts: npt.NDArray
+    x_knots_global: npt.NDArray
+    int_weights: npt.NDArray
+    ecsi_int_pts_coords: npt.NDArray
+    load_vector: npt.NDArray
+    n_ecsi: npt.NDArray
+    b_ecsi: npt.NDArray
+    n_ecsi_function: Callable[[npt.NDArray], npt.NDArray]
+    b_ecsi_function: Callable[[npt.NDArray], npt.NDArray]
 
 
 def c0_pre_processing(
     length: float,
     degree: int,
     n_elements: int,
-    load_function: Callable[[np.ndarray], np.ndarray],
-    ecsi_placement_pts_function: Callable[[int], np.ndarray],
+    load_function: Callable[[npt.NDArray], npt.NDArray],
+    ecsi_placement_pts_function: Callable[[int], npt.NDArray],
     load_at_end: float,
 ):
     det_j = calc_element_1D_jacobian(length / n_elements)
@@ -394,7 +395,7 @@ def c1_pre_processing(
     length: float,
     degree: int,
     n_elements: int,
-    load_function: Callable[[np.ndarray], np.ndarray],
+    load_function: Callable[[npt.NDArray], npt.NDArray],
     load_at_end: float,
 ):
     element_size = length / n_elements
@@ -423,7 +424,7 @@ def c1_pre_processing(
         det_j=det_j,
     )
     load_vector[2 * n_elements] += load_at_end
-    b_esci_matrix_at_int_pts: np.ndarray = b_ecsi_function(
+    b_esci_matrix_at_int_pts: npt.NDArray = b_ecsi_function(
         calc_pts_coords=integration_points,
     )
     return BarNewRaphsonPreProcessing(
@@ -454,8 +455,8 @@ class BarAnalysisInput(Protocol):
 @dataclass
 class BarAnalysis:
     inputs: BarAnalysisInput
-    analytical_solution_function: Callable[[np.ndarray], np.ndarray]
-    analytical_derivative_solution_function: Callable[[np.ndarray], np.ndarray]
+    analytical_solution_function: Callable[[npt.NDArray], npt.NDArray]
+    analytical_derivative_solution_function: Callable[[npt.NDArray], npt.NDArray]
     convergence_crit: NewtonRaphsonConvergenceParam = field(
         default_factory=NewtonRaphsonConvergenceParam
     )
@@ -488,13 +489,13 @@ class BarAnalysis:
             det_j=self.pre_process.det_j,
         )
 
-    def n_ecsi(self, ecsi: np.ndarray) -> np.ndarray:
+    def n_ecsi(self, ecsi: npt.NDArray) -> npt.NDArray:
         return self.pre_process.n_ecsi_function(calc_pts_coords=ecsi)
 
-    def b_ecsi(self, ecsi: np.ndarray) -> np.ndarray:
+    def b_ecsi(self, ecsi: npt.NDArray) -> npt.NDArray:
         return self.pre_process.b_ecsi_function(calc_pts_coords=ecsi)
 
-    def result_df(self, esci_calc_pts: np.ndarray | None = None):
+    def result_df(self, esci_calc_pts: npt.NDArray | None = None):
         if esci_calc_pts is None:
             esci_calc_pts = np.linspace(-1, 1, 21)
         return calc_approx_value(
@@ -526,7 +527,7 @@ class BarAnalysis:
 class C0BarAnalysisInput:
     bar_input: BarInputNonLiner
     ecsi_placement_pts_function: Callable[
-        [int], np.ndarray
+        [int], npt.NDArray
     ] = calc_ecsi_placement_coords_equal_dist
 
     @cached_property
@@ -565,14 +566,14 @@ class EnerergyNormsAndErrors:
 
 
 def calc_l2_h1_error_norms(
-    analytical_solution_function: Callable[[np.ndarray], np.ndarray],
-    analytical_derivative_solution_function: Callable[[np.ndarray], np.ndarray],
-    p_init_global_coords: np.ndarray,
-    knot_displacements: np.ndarray,
-    intergration_weights: np.ndarray,
-    n_ecsi: np.ndarray,
-    b_ecsi: np.ndarray,
-    incidence_matrix: np.ndarray,
+    analytical_solution_function: Callable[[npt.NDArray], npt.NDArray],
+    analytical_derivative_solution_function: Callable[[npt.NDArray], npt.NDArray],
+    p_init_global_coords: npt.NDArray,
+    knot_displacements: npt.NDArray,
+    intergration_weights: npt.NDArray,
+    n_ecsi: npt.NDArray,
+    b_ecsi: npt.NDArray,
+    incidence_matrix: npt.NDArray,
     det_j: float,
 ):
     l2_error_norm = 0
