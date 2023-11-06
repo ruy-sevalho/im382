@@ -12,11 +12,11 @@ from nomeclature import (
 
 
 def calc_approx_value(
-    x_knots_global: npt.NDArray,
-    element_incidence_matrix: npt.NDArray,
-    knot_displacements: npt.NDArray,
-    ecsi_matrix: npt.NDArray,
-    ecsi_calc_pts: npt.NDArray,
+    x_knots_global: npt.NDArray[np.float64],
+    element_incidence_matrix: npt.NDArray[np.float64],
+    knot_displacements: npt.NDArray[np.float64],
+    ecsi_matrix: npt.NDArray[np.float64],
+    ecsi_calc_pts: npt.NDArray[np.float64],
     factor: float = 1,
     result_name: str = "res",
 ):
@@ -34,10 +34,10 @@ def calc_approx_value(
 
 
 def calc_approx_value_isop(
-    p_knots_global: npt.NDArray,
-    element_incidence_matrix: npt.NDArray,
-    knot_displacements: npt.NDArray,
-    esci_matrix_: npt.NDArray,
+    p_knots_global: npt.NDArray[np.float64],
+    element_incidence_matrix: npt.NDArray[np.float64],
+    knot_displacements: npt.NDArray[np.float64],
+    esci_matrix_: npt.NDArray[np.float64],
     factor: float = 1,
     result_name: str = "res",
 ):
@@ -55,11 +55,11 @@ def calc_approx_value_isop(
 
 
 def calc_strain_variable_det_j(
-    p_knots_global: npt.NDArray,
-    element_incidence_matrix: npt.NDArray,
-    knot_displacements: npt.NDArray,
-    n_ecsi_matrix: npt.NDArray,
-    b_ecsi_matrix: npt.NDArray,
+    p_knots_global: npt.NDArray[np.float64],
+    element_incidence_matrix: npt.NDArray[np.float64],
+    knot_displacements: npt.NDArray[np.float64],
+    n_ecsi_matrix: npt.NDArray[np.float64],
+    b_ecsi_matrix: npt.NDArray[np.float64],
     result_name: str = "res",
 ):
     results = pd.DataFrame()
@@ -80,9 +80,9 @@ def calc_error_squared(
     results: pd.DataFrame,
     analytical_solution: Callable[
         [
-            npt.NDArray,
+            npt.NDArray[np.float64],
         ],
-        npt.NDArray,
+        npt.NDArray[np.float64],
     ],
 ):
     results[ANALYTICAL_DISPLACEMENT] = results[X_COORD].apply(analytical_solution)

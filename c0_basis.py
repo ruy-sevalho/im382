@@ -5,7 +5,7 @@ import numpy as np
 import numpy.typing as npt
 import pandas as pd
 from bar_1d import BarInput
-from nomeclature import NUM_DISPLACEMENT, NUM_STRAIN, X_COORD
+from nomeclature import NUM_DISPLACEMENT, NUM_STRAIN
 
 from polynomials import (
     IntegrationTypes,
@@ -13,27 +13,41 @@ from polynomials import (
     get_points_weights,
     get_points_weights_degree,
     lagrange_poli,
-    quadrature_gauss_jacobi_n_pts,
 )
-from post_processing import (
+from post_process import (
     calc_approx_value,
     calc_error_squared,
     calc_l2_error_norm,
-    calc_strain_variable_det_j,
+)
+from pre_process import (
+    calc_element_1D_jacobian,
+    calc_element_stiffness_matrix,
+    calc_load_vector,
+    compose_global_matrix,
 )
 
 
 @dataclass
 class C0BarResults:
     det_j: float
-    ecsi_knots_local: npt.NDArray
-    x_knots_global: npt.NDArray
+    ecsi_knots_local: npt.NDArray[np.float64]
+    p_knots_global: npt.NDArray[np.float64]
     n_degrees_freedom: int
-    element_stiffness_matrix: npt.NDArray
-    incidence_matrix: npt.NDArray
-    global_stiffness_matrix: npt.NDArray
-    load_vector: npt.NDArray
-    knots_displacements: npt.NDArray
+    element_stiffness_matrix: npt.NDArray[np.float64]
+    incidence_matrix: npt.NDArray[np.float64]
+    global_stiffness_matrix: npt.NDArray[np.float64]
+    load_vector: npt.NDArray[np.float64]
+    knots_displacements: npt.NDArray[np.float64]
+
+
+def calc_incidence_matrix(n_elements: int, degree: int):
+    vertices = np.array([np.arange(i, i + 2) for i in range(n_elements)])
+    interior_knots = np.reshape(
+        np.arange(n_elements * (degree - 1)), (n_elements, degree - 1)
+    )
+    if interior_knots.any():
+        return np.concatenate((vertices, interior_knots + n_elements + 1), axis=1)
+    return vertices
 
 
 def c0_bar(
@@ -42,19 +56,19 @@ def c0_bar(
     length: float,
     degree: int,
     n_elements: int,
-    load_function: Callable[[npt.NDArray], npt.NDArray],
-    ecsi_placement_coords_function: Callable[[int], npt.NDArray],
+    load_function: Callable[[npt.NDArray[np.float64]], npt.NDArray[np.float64]],
+    ecsi_placement_coords_function: Callable[[int], npt.NDArray[np.float64]],
 ):
     """Returns the stiffness matrix, the load vector and knot displacement of a axially loaded bar"""
     stiffness = young_modulus * section_area
     det_j = calc_element_1D_jacobian(length / n_elements)
     ecsi_placement_coords = ecsi_placement_coords_function(degree=degree)
-    x_knots_global = calc_x_knots_global(
+    p_knots_global = calc_p_knots_global(
         length=length,
         n_elements=n_elements,
         esci_placement_coords=ecsi_placement_coords,
     )
-    n_knots = x_knots_global.shape[0]
+    n_knots = p_knots_global.shape[0]
 
     # relative to numerical integration of approx solution dericative to calculate de stuiffness matrix
     # intorder is corrected since we are intgreting phi1' * phi1' giving a 2*(P-1) order polynomial
@@ -68,7 +82,7 @@ def c0_bar(
     )
     element_stiffness_matrix = calc_element_stiffness_matrix(
         stiffness=stiffness,
-        b_esci_matrix=b_esci_matrix_at_int_pts,
+        b_ecsi_matrix=b_esci_matrix_at_int_pts,
         int_weights=integration_weights,
         det_j=det_j,
     )
@@ -76,12 +90,12 @@ def c0_bar(
 
     incidence_matrix = calc_incidence_matrix(n_elements=n_elements, degree=degree)
     global_stiffness_matrix = compose_global_matrix(
-        element_stiffness_matrix=element_stiffness_matrix,
-        incindence_matrix=incidence_matrix,
+        element_matrix=element_stiffness_matrix,
+        incidence_matrix=incidence_matrix,
     )
     # get_point_degree intorder adjusted to better precision in numerical integration, since load function is trigonometric
     load_vector = calc_load_vector(
-        x_knots=x_knots_global,
+        x_knots=p_knots_global,
         incidence_matrix=incidence_matrix,
         test_function_local=partial(
             lagrange_poli,
@@ -102,7 +116,7 @@ def c0_bar(
     return C0BarResults(
         det_j=det_j,
         ecsi_knots_local=ecsi_placement_coords,
-        x_knots_global=x_knots_global,
+        p_knots_global=p_knots_global,
         n_degrees_freedom=n_knots,
         element_stiffness_matrix=element_stiffness_matrix,
         incidence_matrix=incidence_matrix,
@@ -112,8 +126,10 @@ def c0_bar(
     )
 
 
-def calc_x_knots_global(
-    length: float, n_elements: int, esci_placement_coords: npt.NDArray
+def calc_p_knots_global(
+    length: float,
+    n_elements: int,
+    esci_placement_coords: npt.NDArray[np.float64],
 ):
     # eliminating the vertices knots
     esci_placement_coords = esci_placement_coords[2:]
@@ -135,11 +151,15 @@ def calc_x_knots_global(
     return x_knots
 
 
-def calc_ecsi_placement_coords_equal_dist(degree: int) -> npt.NDArray:
+def calc_ecsi_placement_coords_equal_dist(
+    degree: int,
+) -> npt.NDArray[np.float64]:
     return np.concatenate(((-1.0, 1.0), np.linspace(-1, 1, degree + 1)[1:-1]))
 
 
-def calc_ecsi_placement_coords_gauss_lobato(degree: int) -> npt.NDArray:
+def calc_ecsi_placement_coords_gauss_lobato(
+    degree: int,
+) -> npt.NDArray[np.float64]:
     pts, _ = get_points_weights_degree(
         intorder=degree + 1, type_int=IntegrationTypes.GLJ
     )
@@ -147,105 +167,14 @@ def calc_ecsi_placement_coords_gauss_lobato(degree: int) -> npt.NDArray:
     return pts
 
 
-def calc_element_stiffness_matrix(
-    stiffness: float,
-    b_esci_matrix: npt.NDArray,
-    int_weights: npt.NDArray,
-    det_j: float,
-):
-    return (
-        np.sum(
-            np.outer(b_col, b_col) * w for b_col, w in zip(b_esci_matrix.T, int_weights)
-        )
-        * stiffness
-        / det_j
-    )
-
-
-def compose_global_matrix(
-    element_stiffness_matrix: npt.NDArray, incindence_matrix: npt.NDArray
-):
-    n_knots = incindence_matrix[-1, -1] + 1
-    stiffness_matrix = np.zeros((n_knots, n_knots))
-    for row in incindence_matrix:
-        stiffness_matrix[
-            row[:, np.newaxis],
-            row[np.newaxis, :],
-        ] += element_stiffness_matrix
-    return stiffness_matrix
-
-
-def calc_incidence_matrix(n_elements: int, degree: int):
-    vertices = np.array([np.arange(i, i + 2) for i in range(n_elements)])
-    interior_knots = np.reshape(
-        np.arange(n_elements * (degree - 1)), (n_elements, degree - 1)
-    )
-    if interior_knots.any():
-        return np.concatenate((vertices, interior_knots + n_elements + 1), axis=1)
-    return vertices
-
-
-def calc_load_vector(
-    x_knots: npt.NDArray,
-    incidence_matrix: npt.NDArray,
-    test_function_local: Callable[[npt.NDArray], npt.NDArray],
-    load_function: Callable[[float], float],
-    intorder: int,
-    det_j: float,
-):
-    ecsi_local_int_pts, weight_int_pts = get_points_weights(
-        0, 0, intorder, IntegrationTypes.GJ, "x"
-    )
-    n_esci_matrix = test_function_local(calc_pts_coords=ecsi_local_int_pts)
-    global_load_vector = np.zeros(incidence_matrix[-1, -1] + 1)
-    for i, element_incidence in enumerate(incidence_matrix):
-        load_function_at_x = np.array(
-            [
-                load_function(x)
-                for x in np.interp(ecsi_local_int_pts, [-1, 1], x_knots[i : i + 2])
-            ]
-        )
-        load_vector = det_j * np.array(
-            [np.sum(row * weight_int_pts * load_function_at_x) for row in n_esci_matrix]
-        )
-        global_load_vector[element_incidence] += load_vector
-    return global_load_vector
-
-
-def calc_load_vector_isop(
-    collocation_pts: npt.NDArray,
-    incidence_matrix: npt.NDArray,
-    n_ecsi_function: Callable[[npt.NDArray], npt.NDArray],
-    load_function: Callable[[npt.NDArray], npt.NDArray],
-    intorder: int,
-    det_j: float,
-):
-    ecsi_local_int_pts, weight_int_pts = get_points_weights(
-        0, 0, intorder, IntegrationTypes.GJ, "x"
-    )
-    n_ecsi = n_ecsi_function(calc_pts_coords=ecsi_local_int_pts)  # type: ignore
-    global_load_vector = np.zeros(incidence_matrix[-1, -1] + 1)
-    for i, element_incidence in enumerate(incidence_matrix):
-        p_coords = n_ecsi.T @ collocation_pts[element_incidence]
-        load_at_x = load_function(p_coords)
-        load_vector = (
-            np.array([np.sum(row * weight_int_pts * load_at_x) for row in n_ecsi])
-            * det_j
-        )
-        global_load_vector[element_incidence] += load_vector
-    return global_load_vector
-
-
-def calc_element_1D_jacobian(element_size: float):
-    return element_size / 2
-
-
 @dataclass
 class C0BarAnalysis:
     inputs: BarInput
-    displacement_analytical: Callable[[npt.NDArray], npt.NDArray]
+    displacement_analytical: Callable[
+        [npt.NDArray[np.float64]], npt.NDArray[np.float64]
+    ]
     ecsi_placement_coords_function: Callable[
-        [int], npt.NDArray
+        [int], npt.NDArray[np.float64]
     ] = calc_ecsi_placement_coords_equal_dist
 
     @cached_property
@@ -269,7 +198,7 @@ class C0BarAnalysis:
             placement_pts_coords=self.bar_result.ecsi_knots_local,
         )
         results = calc_approx_value(
-            x_knots_global=self.bar_result.x_knots_global,
+            x_knots_global=self.bar_result.p_knots_global,
             element_incidence_matrix=self.bar_result.incidence_matrix,
             knot_displacements=self.bar_result.knots_displacements,
             ecsi_matrix=n_ecsi,
@@ -281,7 +210,7 @@ class C0BarAnalysis:
             [
                 results,
                 calc_approx_value(
-                    x_knots_global=self.bar_result.x_knots_global,
+                    x_knots_global=self.bar_result.p_knots_global,
                     element_incidence_matrix=self.bar_result.incidence_matrix,
                     knot_displacements=self.bar_result.knots_displacements,
                     ecsi_matrix=b_ecsi,

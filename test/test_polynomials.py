@@ -6,6 +6,7 @@ import pytest as pt
 from polynomials import (
     IntegrationTypes,
     get_points_weights,
+    get_points_weights_degree,
     lagrange_poli,
     d_lagrange_poli,
 )
@@ -31,8 +32,8 @@ def test_get_points_weight(
     intorder: int,
     type_int: IntegrationTypes,
     coordinate,
-    x_expected: npt.NDArray,
-    w_expected: npt.NDArray,
+    x_expected: npt.NDArray[np.float64],
+    w_expected: npt.NDArray[np.float64],
 ):
     assert np.array(
         get_points_weights(
@@ -51,7 +52,10 @@ def test_gauss_langrange_quadrature_on_polynomial_composed_trig(degree: int):
     def f(x):
         return 1000 * np.sin(np.pi / 2 * x)
 
-    x_zeros = np.linspace(-1, 1, degree + 1)
+    x_zeros, _ = get_points_weights_degree(
+        intorder=degree + 1, type_int=IntegrationTypes.GLJ
+    )
+
     lagrange_poli_pre = partial(
         lagrange_poli, degree=degree, placement_pts_coords=x_zeros
     )
@@ -83,7 +87,6 @@ def test_gauss_langrange_quadrature_on_polynomial_composed_trig(degree: int):
         )
     )
     num_integral = np.array([np.trapz(y_, x_int_trapz) for y_ in y])
-    res = (num_integral - quadrature_integral) / num_integral
     assert quadrature_integral == pt.approx(num_integral, rel=1e-3)
 
 
@@ -115,8 +118,8 @@ def test_gauss_langrange_quadrature_on_polynomial(power: int):
 )
 def test_lagrange_poli(
     degree: int,
-    pi_coords: npt.NDArray,
-    pc_coords: npt.NDArray,
+    pi_coords: npt.NDArray[np.float64],
+    pc_coords: npt.NDArray[np.float64],
     expected_phi,
 ):
     assert lagrange_poli(
@@ -137,8 +140,8 @@ def test_lagrange_poli(
 )
 def test_d_lagrange_poli(
     degree: int,
-    pi_coords: npt.NDArray,
-    pc_coords: npt.NDArray,
+    pi_coords: npt.NDArray[np.float64],
+    pc_coords: npt.NDArray[np.float64],
     expected_dphi,
 ):
     assert d_lagrange_poli(

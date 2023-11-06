@@ -49,7 +49,7 @@ import pytest as pt
 def test_c1basis(
     degree: float,
     element_size: float,
-    coords: npt.NDArray,
+    coords: npt.NDArray[np.float64],
     shape_f,
     shape_f_1d,
     shape_f_2d,

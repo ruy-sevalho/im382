@@ -1,9 +1,8 @@
-from dataclasses import asdict
 import numpy as np
 import sympy as sy
 import matplotlib.pyplot as plt
 
-from bar_1d import BarInput, BarInputNonLiner
+from bar_1d import BarInputNonLiner
 from c0_basis import calc_ecsi_placement_coords_gauss_lobato
 from lame import calc_lambda, calc_mu
 from energy_norm import calc_energy_norm

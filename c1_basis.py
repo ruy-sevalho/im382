@@ -6,35 +6,36 @@ import numpy as np
 import numpy.typing as npt
 import pandas as pd
 from bar_1d import BarInput
-from polynomials import IntegrationTypes, c1_basis
+from polynomials import c1_basis
 
-from c0_basis import (
+from pre_process import (
     calc_element_1D_jacobian,
-    compose_global_matrix,
-    calc_element_stiffness_matrix,
-    calc_load_vector,
 )
 from nomeclature import NUM_DISPLACEMENT, NUM_STRAIN
 from polynomials import get_points_weights
-from post_processing import (
+from post_process import (
     calc_approx_value,
     calc_error_squared,
     calc_l2_error_norm,
-    calc_strain_variable_det_j,
+)
+from pre_process import (
+    calc_element_stiffness_matrix,
+    calc_load_vector,
+    compose_global_matrix,
 )
 
 
 @dataclass
 class C1BarResults:
     det_j: float
-    x_knots_global: npt.NDArray
+    x_knots_global: npt.NDArray[np.float64]
     n_degrees_freedom: int
-    element_stiffness_matrix: npt.NDArray
-    incidence_matrix: npt.NDArray
-    global_stiffness_matrix: npt.NDArray
-    load_vector: npt.NDArray
-    knots_displacements: npt.NDArray
-    reaction: npt.NDArray
+    element_stiffness_matrix: npt.NDArray[np.float64]
+    incidence_matrix: npt.NDArray[np.float64]
+    global_stiffness_matrix: npt.NDArray[np.float64]
+    load_vector: npt.NDArray[np.float64]
+    knots_displacements: npt.NDArray[np.float64]
+    reaction: npt.NDArray[np.float64]
 
 
 def c1_bar(
@@ -43,7 +44,7 @@ def c1_bar(
     length: float,
     degree: int,
     n_elements: int,
-    load_function: Callable[[npt.NDArray], npt.NDArray],
+    load_function: Callable[[npt.NDArray[np.float64]], npt.NDArray[np.float64]],
 ):
     stiffness = young_modulus * section_area
     x_knots_global = calc_x_knots_global(length=length, n_elements=n_elements)
@@ -71,7 +72,7 @@ def c1_bar(
 
     element_stiffness_matrix = calc_element_stiffness_matrix(
         stiffness=stiffness,
-        b_esci_matrix=d1hs,
+        b_ecsi_matrix=d1hs,
         int_weights=integration_weights,
         det_j=det_j,
     )
@@ -79,8 +80,8 @@ def c1_bar(
 
     incidence_matrix = calc_incidence_matrix(n_elements=n_elements, degree=degree)
     global_stiffness_matrix = compose_global_matrix(
-        element_stiffness_matrix=element_stiffness_matrix,
-        incindence_matrix=incidence_matrix,
+        element_matrix=element_stiffness_matrix,
+        incidence_matrix=incidence_matrix,
     )
     load_vector = calc_load_vector(
         x_knots=x_knots_global,
@@ -168,7 +169,9 @@ def calc_incidence_matrix(n_elements: int, degree: int):
 @dataclass
 class C1BarAnalysis:
     inputs: BarInput
-    displacement_analytical: Callable[[npt.NDArray], npt.NDArray]
+    displacement_analytical: Callable[
+        [npt.NDArray[np.float64]], npt.NDArray[np.float64]
+    ]
 
     @cached_property
     def bar_result(self):

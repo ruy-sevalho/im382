@@ -20,7 +20,9 @@ n_elements = 2
 x = sy.symbols("x")
 
 
-def load_function(x: npt.NDArray) -> npt.NDArray:
+def load_function(
+    x: npt.NDArray[np.float64],
+) -> npt.NDArray[np.float64]:
     return 1000 * np.sin(np.pi / 2 * x)
 
 

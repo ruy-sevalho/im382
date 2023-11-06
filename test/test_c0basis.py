@@ -6,13 +6,15 @@ import numpy.typing as npt
 from c0_basis import (
     c0_bar,
     calc_incidence_matrix,
-    calc_load_vector,
-    calc_x_knots_global,
+    calc_p_knots_global,
     calc_ecsi_placement_coords_equal_dist,
-    calc_element_stiffness_matrix,
-    compose_global_matrix,
 )
 from polynomials import lagrange_poli
+from pre_process import (
+    calc_element_stiffness_matrix,
+    calc_load_vector,
+    compose_global_matrix,
+)
 
 
 @pt.mark.parametrize(
@@ -25,10 +27,10 @@ from polynomials import lagrange_poli
 def test_x_knots_global(
     length: float,
     n_elements: int,
-    esci_internal_knots_coords: npt.NDArray,
-    expected_knots: npt.NDArray,
+    esci_internal_knots_coords: npt.NDArray[np.float64],
+    expected_knots: npt.NDArray[np.float64],
 ):
-    assert calc_x_knots_global(
+    assert calc_p_knots_global(
         length=length,
         n_elements=n_elements,
         esci_placement_coords=esci_internal_knots_coords,
@@ -378,7 +380,7 @@ def test_element_stiffness_matrix(
 ):
     assert calc_element_stiffness_matrix(
         stiffness=stiffness,
-        b_esci_matrix=b_esci_matrix,
+        b_ecsi_matrix=b_esci_matrix,
         int_weights=int_weights,
         det_j=det_j,
     ) == pt.approx(expected_matrix)
@@ -613,13 +615,13 @@ def test_incidence_matrix(n_elements: int, degree: int, expected_matrix: np.arra
     ),
 )
 def test_assembly_global_stiffeness(
-    element_stiffeness_matrix: npt.NDArray,
-    incidence_matrix: npt.NDArray,
-    expected_global_stiffeness: npt.NDArray,
+    element_stiffeness_matrix: npt.NDArray[np.float64],
+    incidence_matrix: npt.NDArray[np.float64],
+    expected_global_stiffeness: npt.NDArray[np.float64],
 ):
     assert compose_global_matrix(
-        element_stiffness_matrix=element_stiffeness_matrix,
-        incindence_matrix=incidence_matrix,
+        element_matrix=element_stiffeness_matrix,
+        incidence_matrix=incidence_matrix,
     ) == pt.approx(expected_global_stiffeness)
 
 
@@ -674,18 +676,18 @@ def test_assembly_global_stiffeness(
     ),
 )
 def test_load_vector(
-    x_knots: npt.NDArray,
-    element_incidence_matrix: npt.NDArray,
-    test_function_local: Callable[[npt.NDArray], npt.NDArray],
-    load_function: Callable[[npt.NDArray], float],
+    x_knots: npt.NDArray[np.float64],
+    element_incidence_matrix: npt.NDArray[np.float64],
+    test_function_local: Callable[[npt.NDArray[np.float64]], npt.NDArray[np.float64]],
+    load_function: Callable[[npt.NDArray[np.float64]], float],
     intorder: int,
     det_j: float,
-    expected_load_vector: npt.NDArray,
+    expected_load_vector: npt.NDArray[np.float64],
 ):
     assert calc_load_vector(
         x_knots=x_knots,
         incidence_matrix=element_incidence_matrix,
-        n_ecsi_function=test_function_local,
+        test_function_local=test_function_local,
         load_function=load_function,
         intorder=intorder,
         det_j=det_j,
