@@ -20,7 +20,13 @@ from c0_basis import calc_incidence_matrix as calc_incidence_matrix_c0
 from c1_basis import calc_incidence_matrix as calc_incidence_matrix_c1
 from c1_basis import calc_x_knots_global as calc_knots_global_c1
 from c1_basis import calc_x_knots_global_complete as calc_collocation_pts_c1
-from nomeclature import NUM_DISPLACEMENT
+from nomeclature import (
+    NUM_DISPLACEMENT,
+    L2_ERROR_NORM,
+    L2_SOL_NORM,
+    H1_ERROR_NORM,
+    H1_SOL_NORM,
+)
 from polynomials import d_lagrange_poli, get_points_weights, lagrange_poli, c1_basis
 
 
@@ -91,7 +97,6 @@ def newton_raphson(
                 tangent_stiffness_matrix,
                 internal_load_vector,
             ) = assemble_global_non_linear_stiff_matrix(
-                n_elements=n_elements,
                 collocation_pts=collocation_pts,
                 incidence_matrix=incidence_matrix,
                 displacements=disp,
@@ -137,7 +142,6 @@ def newton_raphson(
                 tangent_stiffness_matrix,
                 internal_load_vector,
             ) = assemble_global_non_linear_stiff_matrix(
-                n_elements=n_elements,
                 collocation_pts=collocation_pts,
                 incidence_matrix=incidence_matrix,
                 displacements=disp,
@@ -208,7 +212,6 @@ def newton_raphson(
 
 
 def assemble_global_non_linear_stiff_matrix(
-    n_elements: int,
     collocation_pts: npt.NDArray[np.float64],
     incidence_matrix: npt.NDArray[np.float64],
     displacements: npt.NDArray[np.float64],
@@ -219,6 +222,7 @@ def assemble_global_non_linear_stiff_matrix(
     area: float,
     det_j: float,
 ):
+    n_elements = incidence_matrix.shape[0]
     n_knots = len(collocation_pts)
     n_int_pts = len(int_weights)
     element_degrees_freedom = incidence_matrix.shape[1]
@@ -567,6 +571,17 @@ class EnerergyNormsAndErrors:
     l2_sol_norm: float
     h1_error_norm: float
     h1_sol_norm: float
+
+    @cached_property
+    def df(self):
+        return pd.DataFrame(
+            {
+                L2_ERROR_NORM: [self.l2_error_norm],
+                L2_SOL_NORM: [self.l2_sol_norm],
+                H1_ERROR_NORM: [self.h1_error_norm],
+                H1_SOL_NORM: [self.h1_sol_norm],
+            }
+        )
 
 
 def calc_l2_h1_error_norms(
