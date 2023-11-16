@@ -115,7 +115,8 @@ def calc_external_load_vector(
 ):
     load_vector = np.zeros(incidence_matrix[-1, -1] + 1)
     for e in incidence_matrix:
-        load_vector[e] += (
-            n_ecsi.T @ load_function(p=p_coords[e]) * integration_weights * det_j
+        load_function_at_x = load_function(p=n_ecsi.T @ p_coords[e])
+        load_vector[e] += det_j * np.array(
+            [np.sum(row * integration_weights * load_function_at_x) for row in n_ecsi]
         )
     return load_vector

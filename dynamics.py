@@ -177,6 +177,144 @@ def run_analysis_central_difference(
     )
 
 
+def run_analysis_central_difference2(
+    young_modulus: float,
+    poisson: float,
+    area: float,
+    p_coords: npt.NDArray[np.float64],
+    incidence_matrix: npt.NDArray[np.float64],
+    integration_weights: npt.NDArray[np.float64],
+    det_j: float,
+    n_ecsi: npt.NDArray[np.float64],
+    b_ecsi: npt.NDArray[np.float64],
+    global_mass_matrix: npt.NDArray[np.float64],
+    dist_load_function_p_t: Callable[[float, float], float],
+    normal_force_pk_1_at_end_function_t: Callable[[float], float],
+    disp_function_p_t: Callable[[float, float], float],
+    velocity_function_p_t: Callable[[float, float], float],
+    t_initial: float,
+    t_final: float,
+    n_time_steps: int,
+):
+    n_elements = incidence_matrix.shape[0]
+    degrees_of_freedom = incidence_matrix[-1, -1] + 1
+
+    times = np.linspace(t_initial, t_final, n_time_steps + 1)
+    delta_t = (t_final - t_initial) / n_time_steps
+    a0 = 1 / delta_t**2
+    a1 = 1 / (2 * delta_t)
+    a2 = 2 * a0
+    a3 = 1 / a2
+
+    initial_displacements = disp_function_p_t(p_coords, t_initial)
+    displacements = np.zeros((n_time_steps + 2, degrees_of_freedom))
+    velocities = np.zeros((n_time_steps + 2, degrees_of_freedom))
+    accelerations = np.zeros((n_time_steps + 2, degrees_of_freedom))
+
+    lumped_mass_vector = np.array([np.sum(mass) for mass in global_mass_matrix.T])
+    _, internal_load_vector = assemble_global_non_linear_stiff_matrix(
+        collocation_pts=p_coords,
+        incidence_matrix=incidence_matrix,
+        displacements=initial_displacements,
+        b_ecsi=b_ecsi,
+        int_weights=integration_weights,
+        young_modulus=young_modulus,
+        poisson=poisson,
+        area=area,
+        det_j=det_j,
+    )
+    external_load_vector = calc_external_load_vector(
+        p_coords=p_coords,
+        incidence_matrix=incidence_matrix,
+        n_ecsi=n_ecsi,
+        integration_weights=integration_weights,
+        det_j=det_j,
+        load_function=partial(dist_load_function_p_t, t=t_initial),
+    )
+    external_load_vector[n_elements] += normal_force_pk_1_at_end_function_t(t_initial)
+    free_nodes = np.arange(1, degrees_of_freedom)
+    velocities[1, :] = velocity_function_p_t(p_coords, t_initial)
+    displacements[1, :] = initial_displacements
+    accelerations[1, :] = np.linalg.solve(
+        global_mass_matrix, external_load_vector - internal_load_vector
+    )
+    # accelerations[1, :] = (
+    #     external_load_vector - internal_load_vector
+    # ) / lumped_mass_vector
+    displacements[0, :] = (
+        displacements[1, :] - delta_t * velocities[1, :] + a3 * accelerations[1, :]
+    )
+    time_start = time()
+    hat_mass_vector = global_mass_matrix * a0
+    # hat_mass_vector = lumped_mass_vector * a0
+    for step in range(1, n_time_steps):
+        t = times[step]
+        external_load_vector = calc_external_load_vector(
+            p_coords=p_coords,
+            incidence_matrix=incidence_matrix,
+            n_ecsi=n_ecsi,
+            integration_weights=integration_weights,
+            det_j=det_j,
+            load_function=partial(dist_load_function_p_t, t=t),
+        )
+        external_load_vector[n_elements] += normal_force_pk_1_at_end_function_t(t)
+        residual_load_vector = external_load_vector - internal_load_vector
+        displacements[step + 1, free_nodes] = (
+            np.linalg.solve(
+                hat_mass_vector[free_nodes[:, np.newaxis], free_nodes[np.newaxis, :]],
+                residual_load_vector[free_nodes],
+            )
+            + 2 * displacements[step, free_nodes]
+            - displacements[step - 1, free_nodes]
+        )
+        # displacements[step + 1, free_nodes] = (
+        #     residual_load_vector[free_nodes] / hat_mass_vector[free_nodes]
+        #     + 2 * displacements[step, free_nodes]
+        #     - displacements[step - 1, free_nodes]
+        # )
+        accelerations[step + 1, :] = a0 * (
+            displacements[step - 1, :]
+            - 2 * displacements[step, :]
+            + displacements[step + 1, :]
+        )
+        velocities[step + 1, :] = a1 * (
+            displacements[step + 1, :] - displacements[step - 1, :]
+        )
+        internal_load_vector = calc_internal_load_vector(
+            p_coords=p_coords,
+            incidence_matrix=incidence_matrix,
+            displacements=displacements[step + 1, :],
+            b_ecsi=b_ecsi,
+            det_j=det_j,
+            integration_weights=integration_weights,
+            young_modulus=young_modulus,
+            poisson=poisson,
+            area=area,
+        )
+
+    displacements[-1, :] = displacements[-2, :]
+    external_load_vector = calc_external_load_vector(
+        p_coords=p_coords,
+        incidence_matrix=incidence_matrix,
+        n_ecsi=n_ecsi,
+        integration_weights=integration_weights,
+        det_j=det_j,
+        load_function=partial(dist_load_function_p_t, t=t_final),
+    )
+    accelerations[-1, :] = np.linalg.solve(
+        global_mass_matrix, external_load_vector - internal_load_vector
+    )
+
+    velocities[-1, :] = velocities[-2, :] + 1 / a1 * accelerations[-1, :]
+    elapsed_time = time() - time_start
+    return DynamicsResults(
+        displacements=displacements,
+        velocities=velocities,
+        accelerations=accelerations,
+        elapsed_time=elapsed_time,
+    )
+
+
 def run_analysis_newmark(
     young_modulus: float,
     poisson: float,
@@ -500,6 +638,28 @@ class BarDynamics:
         )
 
     @cached_property
+    def results_central_difference2(self):
+        return run_analysis_central_difference2(
+            young_modulus=self.bar.young_modulus,
+            poisson=self.bar.poisson,
+            area=self.bar.section_area,
+            p_coords=self.pre_process.p_coords,
+            incidence_matrix=self.pre_process.incidence_matrix,
+            integration_weights=self.pre_process.integration_weigths,
+            det_j=self.pre_process.det_j,
+            n_ecsi=self.pre_process.n_ecsi,
+            b_ecsi=self.pre_process.b_ecsi,
+            global_mass_matrix=self.pre_process.global_mass_matrix,
+            dist_load_function_p_t=self.dist_load_function,
+            normal_force_pk_1_at_end_function_t=self.normal_force_pk_1_at_end_function_t,
+            disp_function_p_t=self.disp_function_p_t,
+            velocity_function_p_t=self.velocity_function_p_t,
+            t_initial=self.t_initial,
+            t_final=self.t_final,
+            n_time_steps=self.n_time_steps,
+        )
+
+    @cached_property
     def results_newmark(self):
         return run_analysis_newmark(
             young_modulus=self.bar.young_modulus,
@@ -543,6 +703,10 @@ class BarDynamics:
     @cached_property
     def error_norms_central_difference(self):
         return self.calc_error_norms(self.results_central_difference)
+
+    @cached_property
+    def error_norms_central_difference2(self):
+        return self.calc_error_norms(self.results_central_difference2)
 
     @cached_property
     def error_norms_newmark(self):
