@@ -658,6 +658,9 @@ class BarDynamics:
             t_final=self.t_final,
             n_time_steps=self.n_time_steps,
         )
+    
+    def results_cd(self):
+        return self.results_central_difference
 
     @cached_property
     def results_newmark(self):

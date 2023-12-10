@@ -6,7 +6,7 @@ from logging import warning
 from typing import Callable
 import numpy as np
 import numpy.typing as npt
-import pandas as pd
+from bar_1d import EnergyNormsAndErrors
 
 from bar_1d import BarInput, BarInputNonLiner
 from c0_basis import (
@@ -18,14 +18,10 @@ from c0_basis import (
 )
 from c0_basis import calc_incidence_matrix as calc_incidence_matrix_c0
 from c1_basis import calc_incidence_matrix as calc_incidence_matrix_c1
-from c1_basis import calc_x_knots_global as calc_knots_global_c1
-from c1_basis import calc_x_knots_global_complete as calc_collocation_pts_c1
+from c1_basis import calc_p_knots_global as calc_knots_global_c1
+from c1_basis import calc_p_knots_global_complete as calc_collocation_pts_c1
 from nomeclature import (
     NUM_DISPLACEMENT,
-    L2_ERROR_NORM,
-    L2_SOL_NORM,
-    H1_ERROR_NORM,
-    H1_SOL_NORM,
 )
 from polynomials import d_lagrange_poli, get_points_weights, lagrange_poli, c1_basis
 
@@ -565,25 +561,6 @@ class C1BarAnalysisInput:
         )
 
 
-@dataclass
-class EnerergyNormsAndErrors:
-    l2_error_norm: float
-    l2_sol_norm: float
-    h1_error_norm: float
-    h1_sol_norm: float
-
-    @cached_property
-    def df(self):
-        return pd.DataFrame(
-            {
-                L2_ERROR_NORM: [self.l2_error_norm],
-                L2_SOL_NORM: [self.l2_sol_norm],
-                H1_ERROR_NORM: [self.h1_error_norm],
-                H1_SOL_NORM: [self.h1_sol_norm],
-            }
-        )
-
-
 def calc_l2_h1_error_norms(
     analytical_solution_function: Callable[
         [npt.NDArray[np.float64]], npt.NDArray[np.float64]
@@ -622,7 +599,7 @@ def calc_l2_h1_error_norms(
         )
         h1_sol_norm += np.sum(num_derivative**2 * det_j * intergration_weights)
 
-    return EnerergyNormsAndErrors(
+    return EnergyNormsAndErrors(
         l2_error_norm=l2_error_norm**0.5,
         l2_sol_norm=l2_sol_norm**0.5,
         h1_error_norm=h1_error_norm**0.5,
