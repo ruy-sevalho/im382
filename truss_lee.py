@@ -865,18 +865,28 @@ truss = TrussInputs(
 convergence_criteria = NewtonRaphsonConvergenceParam(
     n_load_steps=1000,
     max_iterations=100,
-    precision=1e-3,
+    precision=1e-5,
     convergence_criteria=ConvergenceCriteria.DISPLACEMENT,
 )
+
+
+analysis = Analysis(truss=truss, convergence_crit=convergence_criteria)
+res = analysis.results
 
 ax: plt.Axes
 fig, ax = plt.subplots()
 fig.set_dpi(600)
 x, y = coords[:, 0], coords[:, 1]
-[plt.text(i, j, f"{n}", size=2) for n, (i, j) in enumerate(zip(x, y))]
-
+# [plt.text(i, j, f"{n}", size=2) for n, (i, j) in enumerate(zip(x, y))]
+deformed_coords = analysis.deformed_shape()
 for e in incidence:
-    ax.plot(coords[e][:, 0], coords[e][:, 1], linewidth=0.2, color="blue")
-
-analysis = Analysis(truss=truss, convergence_crit=convergence_criteria)
-# res = analysis.results
+    ax.plot(
+        coords[e][:, 0],
+        coords[e][:, 1],
+        linewidth=0.2,
+        color="blue",
+        linestyle="dashed",
+    )
+    ax.plot(
+        deformed_coords[e][:, 0], deformed_coords[e][:, 1], linewidth=0.2, color="red"
+    )

@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-from truss2d import TrussInputs
+from truss2d import TrussInputs, LinearTruss
 
 x = 100 * 3**0.5
 coords = np.array([[0, 0], [x, 0], [2 * x, 0], [x, 100]])
@@ -52,4 +52,5 @@ truss = TrussInputs(
     yield_stress=5,
     section_area=1,
 )
-truss.run
+analysis = LinearTruss(truss=truss)
+analysis.run

@@ -42,8 +42,6 @@ def calc_truss(
     n_nodes = coords.shape[0]
     nodal_dofs = 2
     n_elements = incidences.shape[0]
-    n_boundary_conditions = boundary_conditions.shape[0]
-    n_loaded_nodes = loads.shape[0]
     nodal_dofs_mapping = np.ones((nodal_dofs, n_nodes), dtype=int)
     for bc in boundary_conditions:
         nodal_dofs_mapping[bc[1], bc[0]] = 0
@@ -168,6 +166,11 @@ def assembly_global_stiffness(
             section_area=section_area,
         )
         elem_eqs = nodal_dofs_mapping[:, incidence]
+        test_m = np.reshape(np.arange(16, (4, 4)))
+        z = np.zeros((4, 4))
+        z[
+            elem_eqs.T.flatten()[:, np.newaxis], elem_eqs.T.flatten()[np.newaxis, :]
+        ] += test_m
         global_stiffness[
             elem_eqs.T.flatten()[:, np.newaxis], elem_eqs.T.flatten()[np.newaxis, :]
         ] += element_stiffness

@@ -1,6 +1,6 @@
 from dataclasses import asdict, dataclass, field
 from functools import cached_property
-from logging import warning, info
+from logging import warning
 import numpy as np
 from c0_basis import calc_ecsi_placement_coords_gauss_lobato
 from newton_raphson import ConvergenceCriteria, NewtonRaphsonConvergenceParam
@@ -8,8 +8,6 @@ from polynomials import d_lagrange_poli, get_points_weights
 from truss2d import (
     TrussInputs,
     assembly_global_load,
-    calc_element_lengths,
-    assembly_rotation_matrix,
     calc_rotation_matrix,
 )
 from type_alias import Array
@@ -25,6 +23,14 @@ class Analysis:
     @cached_property
     def results(self):
         return solve(**asdict(self.truss), **asdict(self.convergence_crit))
+
+    def deformed_shape(self, scale: float = 1):
+        return calc_deformed_coords(
+            initial_coords=self.truss.coords,
+            nodal_dofs_mapping=self.results.nodal_dofs_mapping,
+            displacements=self.results.displacements,
+            factor=scale,
+        )
 
 
 @dataclass
@@ -224,13 +230,12 @@ def solve(
                 ConvergenceCriteria.FORCE: crit_residue,
             }
             conv_measure = table[convergence_criteria]
-
             crit_disp_list.append(crit_disp)
             crit_residue_list.append(crit_residue)
             crit_comb_list.append(crit_comb)
             print(f"Load step: {step}, interation: {load_step_counter}")
-        iter_per_load_step[step - 1] = load_step_counter
 
+        iter_per_load_step[step - 1] = load_step_counter
         crit_disp_per_step.append(crit_disp)
         crit_residue_per_step.append(crit_residue)
         crit_comb_per_step.append(crit_comb)
@@ -238,6 +243,7 @@ def solve(
             warning(f"No conversion in load step {step}")
         else:
             conv_measure = 1
+
     return Results(
         total_dofs=total_dofs,
         n_free_dofs=n_free_dofs,
@@ -280,7 +286,7 @@ def assemble_stiff_matrix_and_internal_force_vector(
         element_internal_force = np.zeros(degree + 1)
         p_2d_coords = element_coords[element_incidence]
         element_mapped_index = nodal_dofs_mapping[:, element_incidence]
-        element_displacements = displacements[element_mapped_index]
+        element_displacements = displacements[element_mapped_index.T]
         x_2d_coords = p_2d_coords + element_displacements
         p_1d_coords = reduce_dimension(p_2d_coords)
         x_1d_coords = reduce_dimension(x_2d_coords)
@@ -289,14 +295,18 @@ def assemble_stiff_matrix_and_internal_force_vector(
         ):
             jacobian_p = b_ecsi_col @ p_1d_coords
             assert jacobian_p == abs(p_1d_coords[1] - p_1d_coords[0]) / 2
+            dif_p = (jacobian_p - reduce_dimension_alt(p_2d_coords) / 2) / jacobian_p
+            assert dif_p < 1e-10
             jacobian_x = b_ecsi_col @ x_1d_coords
             assert jacobian_x == abs(x_1d_coords[1] - x_1d_coords[0]) / 2
+            dif_x = (jacobian_x - reduce_dimension_alt(x_2d_coords) / 2) / jacobian_x
+            assert dif_x < 1e-10
             deformation_gradient = jacobian_x / jacobian_p
             linear_part_disp_grad = b_ecsi_col / jacobian_p
             strain_increment = np.log(deformation_gradient)
 
             (
-                stresses[e],
+                stresses[e, i],
                 plastic_strain[i],
                 alpha[i],
                 elastoplastic_modulus,
@@ -310,7 +320,7 @@ def assemble_stiff_matrix_and_internal_force_vector(
             )
 
             non_linear_part_disp_grad = linear_part_disp_grad * deformation_gradient
-            piolla_kirc_stress = stresses[e] / deformation_gradient
+            piolla_kirc_stress = stresses[e, i] / deformation_gradient
             element_stiffness += (
                 (
                     np.outer(
@@ -361,6 +371,13 @@ def reduce_dimension(element_coords: Array):
     return r @ element_coords.flatten()
 
 
+def reduce_dimension_alt(element_coords: Array):
+    delta_x = element_coords[1][0] - element_coords[0][0]
+    delta_y = element_coords[1][1] - element_coords[0][1]
+    length = (delta_x**2 + delta_y**2) ** 0.5
+    return length
+
+
 def return_mapping_isotropic_hardening(
     young_modulus: float,
     isotropic_hardening: float,
@@ -386,3 +403,12 @@ def return_mapping_isotropic_hardening(
         new_alpha = alpha + delta_lambda
         elastoplastic_modulus = young_modulus * isotropic_hardening / corrected_modulus
     return new_stress, new_plastic_strain, new_alpha, elastoplastic_modulus
+
+
+def calc_deformed_coords(
+    initial_coords: Array,
+    nodal_dofs_mapping: Array,
+    displacements: Array,
+    factor: float = 1,
+):
+    return initial_coords + displacements[nodal_dofs_mapping.T] * factor

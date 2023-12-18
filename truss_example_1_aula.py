@@ -1,6 +1,6 @@
 import numpy as np
 
-from truss2d import TrussInputs
+from truss2d import LinearTruss, TrussInputs
 
 coords = np.array([[0, 0], [0, 4], [3, 0], [3, 4], [6, 0], [6, 4]])
 incidence = np.array(
@@ -37,8 +37,9 @@ truss = TrussInputs(
     boundary_conditions=boundary_conditions,
     loads=loads,
     young_modulus=70e9,
-    isotropic_hardening=1000 / 9,
-    yield_stress=4,
+    isotropic_hardening=85e6,
+    yield_stress=56e6,
     section_area=3e-4,
 )
-truss.run
+analysis = LinearTruss(truss=truss)
+analysis.run
