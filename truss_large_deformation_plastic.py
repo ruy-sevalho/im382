@@ -22,7 +22,7 @@ class Analysis:
 
     @cached_property
     def results(self):
-        return solve(
+        return newton_raphson_platic(
             **asdict(self.truss),
             **asdict(self.convergence_crit),
             n_elements=self.truss.pre_process.n_elements,
@@ -43,10 +43,7 @@ class Analysis:
 
 
 @dataclass
-class Results:
-    total_dofs: int
-    n_free_dofs: int
-    nodal_dofs_mapping: Array
+class ResultsNewtonRaphson:
     displacements: Array
     plastic_strains: Array
     alphas: Array
@@ -58,7 +55,7 @@ class Results:
     crit_comb_per_step: Array
 
 
-def solve(
+def newton_raphson_platic(
     section_area: float,
     young_modulus: float,
     isotropic_hardening: float,
@@ -237,10 +234,7 @@ def solve(
         else:
             conv_measure = 1
 
-    return Results(
-        total_dofs=total_dofs,
-        n_free_dofs=n_free_dofs,
-        nodal_dofs_mapping=nodal_dofs_mapping,
+    return ResultsNewtonRaphson(
         displacements=displacements,
         plastic_strains=plastic_strains,
         alphas=alphas,
