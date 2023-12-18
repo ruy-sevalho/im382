@@ -12,7 +12,7 @@ from dynamics import BarDynamics, C0BarDynamics, DynamicsResults
 from lame import calc_lambda, calc_mu
 from c0_basis import calc_ecsi_placement_coords_gauss_lobato
 from nomeclature import X_COORD, NUM_DISPLACEMENT, DEGREE, N_STEPS, ELAPSED_TIME
-from newton_raphson import EnerergyNormsAndErrors
+from bar_1d import EnergyNormsAndErrors
 
 # %%
 t0 = time()
@@ -125,7 +125,7 @@ delta_t = time() - t0
 
 
 def get_results(
-    analysis: BarDynamics, error_norms: EnerergyNormsAndErrors, res: DynamicsResults
+    analysis: BarDynamics, error_norms: EnergyNormsAndErrors, res: DynamicsResults
 ):
     error = error_norms.df
     return pd.concat(
@@ -165,66 +165,25 @@ ax.plot(x, u, label="analytical")
 t1 = time()
 # t_steps = [10000, 7500, 5000, 2500]
 degrees = [1, 2, 4]
-# for degree in degrees:
-#     bar = replace(bar, degree=degree)
-#     bar_dynamics_c0 = C0BarDynamics(
-#         bar=bar, ecsi_placement_coords_function=calc_ecsi_placement_coords_gauss_lobato
-#     )
-#     analysis = BarDynamics(
-#         data=bar_dynamics_c0,
-#         dist_load_function=dist_load_num,
-#         normal_force_pk_1_at_end_function_t=load_at_end_num,
-#         disp_function_p_t=disp_num,
-#         disp_derivative_function_p_t=displacement_derivative_num,
-#         velocity_function_p_t=velocity_num,
-#         t_initial=t_initial,
-#         t_final=t_final,
-#         n_time_steps=15000,
-#     )
-#     pre_calc_sorted_displacement = partial(
-#         get_sorted_displacement, p_coords=analysis.pre_process.p_coords
-#     )
-#     error = analysis.error_norms_central_difference
-#     error_df = pd.concat(
-#         [error_df, get_results(analysis, error, analysis.results_central_difference)]
-#     )
-#     displacement_df = pre_calc_sorted_displacement(
-#         analysis.results_central_difference.displacements[-1, :]
-#     )
-#     ax.plot(
-#         displacement_df[X_COORD],
-#         displacement_df[NUM_DISPLACEMENT],
-#         label=f"Cent Diff {n_steps}",
-#     )
-
-# analysis = BarDynamics(
-#     data=bar_dynamics_c0,
-#     dist_load_function=dist_load_num,
-#     normal_force_pk_1_at_end_function_t=load_at_end_num,
-#     disp_function_p_t=disp_num,
-#     disp_derivative_function_p_t=displacement_derivative_num,
-#     velocity_function_p_t=velocity_num,
-#     t_initial=t_initial,
-#     t_final=t_final,
-#     n_time_steps=10,
-# )
-# error = analysis.error_norms_newmark
-# error_df = pd.concat(
-#     [error_df, get_results(analysis, error, analysis.results_newmark)]
-# )
-# displacement_df = pre_calc_sorted_displacement(
-#     analysis.results_newmark.displacements[-1, :]
-# )
-# ax.plot(
-#     displacement_df[X_COORD],
-#     displacement_df[NUM_DISPLACEMENT],
-#     label=f"Newmark {n_steps}",
-# )
-
-
-t_steps = [15000]
-for n_steps in t_steps:
-    analysis = replace(analysis, n_time_steps=n_steps)
+for degree in degrees:
+    bar = replace(bar, degree=degree)
+    bar_dynamics_c0 = C0BarDynamics(
+        bar=bar, ecsi_placement_coords_function=calc_ecsi_placement_coords_gauss_lobato
+    )
+    analysis = BarDynamics(
+        data=bar_dynamics_c0,
+        dist_load_function=dist_load_num,
+        normal_force_pk_1_at_end_function_t=load_at_end_num,
+        disp_function_p_t=disp_num,
+        disp_derivative_function_p_t=displacement_derivative_num,
+        velocity_function_p_t=velocity_num,
+        t_initial=t_initial,
+        t_final=t_final,
+        n_time_steps=20000,
+    )
+    pre_calc_sorted_displacement = partial(
+        get_sorted_displacement, p_coords=analysis.pre_process.p_coords
+    )
     error = analysis.error_norms_central_difference
     error_df = pd.concat(
         [error_df, get_results(analysis, error, analysis.results_central_difference)]
@@ -235,8 +194,49 @@ for n_steps in t_steps:
     ax.plot(
         displacement_df[X_COORD],
         displacement_df[NUM_DISPLACEMENT],
-        label=f"Central Diff {n_steps}",
+        label=f"Cent Diff {n_steps}",
     )
+
+    analysis = BarDynamics(
+        data=bar_dynamics_c0,
+        dist_load_function=dist_load_num,
+        normal_force_pk_1_at_end_function_t=load_at_end_num,
+        disp_function_p_t=disp_num,
+        disp_derivative_function_p_t=displacement_derivative_num,
+        velocity_function_p_t=velocity_num,
+        t_initial=t_initial,
+        t_final=t_final,
+        n_time_steps=100,
+    )
+    error = analysis.error_norms_newmark
+    error_df = pd.concat(
+        [error_df, get_results(analysis, error, analysis.results_newmark)]
+    )
+    displacement_df = pre_calc_sorted_displacement(
+        analysis.results_newmark.displacements[-1, :]
+    )
+    ax.plot(
+        displacement_df[X_COORD],
+        displacement_df[NUM_DISPLACEMENT],
+        label=f"Newmark {n_steps}",
+    )
+
+
+# t_steps = [15000]
+# for n_steps in t_steps:
+#     analysis = replace(analysis, n_time_steps=n_steps)
+#     error = analysis.error_norms_central_difference
+#     error_df = pd.concat(
+#         [error_df, get_results(analysis, error, analysis.results_central_difference)]
+#     )
+#     displacement_df = pre_calc_sorted_displacement(
+#         analysis.results_central_difference.displacements[-1, :]
+#     )
+#     ax.plot(
+#         displacement_df[X_COORD],
+#         displacement_df[NUM_DISPLACEMENT],
+#         label=f"Central Diff {n_steps}",
+#     )
 
 
 # t_steps = [100, 10, 5]

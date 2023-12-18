@@ -17,9 +17,14 @@ class TrussInputs:
     yield_stress: float
     section_area: float
 
+
+@dataclass
+class LinearTruss:
+    truss: TrussInputs
+
     @cached_property
     def run(self):
-        return calc_truss(**asdict(self))
+        return calc_truss(**asdict(self.truss))
 
 
 def calc_truss(
@@ -88,6 +93,10 @@ def calc_truss(
     return
 
 
+def calc_strain(element_length: Array):
+    return 1 / element_length[0] * ()
+
+
 def calc_element_lengths(coords: Array, incidences: Array):
     lengths = np.zeros((incidences.shape[0], 3))
     lengths[:, 0] = (
@@ -130,6 +139,17 @@ def calc_element_stiffness(
         )
         / element_length[0]
     )
+
+
+def assembly_rotation_matrix(cos: float, sin: float):
+    return np.array([[cos, sin, 0, 0], [0, 0, cos, sin]])
+
+
+def calc_rotation_matrix(element_coords: Array):
+    delta_x = element_coords[1][0] - element_coords[0][0]
+    delta_y = element_coords[1][1] - element_coords[0][1]
+    length = (delta_x**2 + delta_y**2) ** 0.5
+    return assembly_rotation_matrix(delta_x / length, delta_y / length)
 
 
 def assembly_global_stiffness(

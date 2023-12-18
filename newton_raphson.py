@@ -519,7 +519,7 @@ class BarAnalysis:
             analytical_derivative_solution_function=self.analytical_derivative_solution_function,
             p_init_global_coords=self.pre_process.collocation_pts,
             knot_displacements=self.bar_result.displacements,
-            intergration_weights=self.pre_process.int_weights,
+            integration_weights=self.pre_process.int_weights,
             n_ecsi=self.pre_process.n_ecsi,
             b_ecsi=self.pre_process.b_ecsi,
             incidence_matrix=self.pre_process.incidence_matrix,
@@ -570,7 +570,7 @@ def calc_l2_h1_error_norms(
     ],
     p_init_global_coords: npt.NDArray[np.float64],
     knot_displacements: npt.NDArray[np.float64],
-    intergration_weights: npt.NDArray[np.float64],
+    integration_weights: npt.NDArray[np.float64],
     n_ecsi: npt.NDArray[np.float64],
     b_ecsi: npt.NDArray[np.float64],
     incidence_matrix: npt.NDArray[np.float64],
@@ -590,14 +590,14 @@ def calc_l2_h1_error_norms(
         num_derivative = b_ecsi.T @ element_displacements / det_j
         l2_error_norm += np.sum(
             (analitycal_displacement - num_displacement) ** 2
-            * intergration_weights
+            * integration_weights
             * det_j
         )
-        l2_sol_norm += np.sum(num_displacement**2 * det_j * intergration_weights)
+        l2_sol_norm += np.sum(num_displacement**2 * det_j * integration_weights)
         h1_error_norm += np.sum(
-            (analytical_derivative - num_derivative) ** 2 * det_j * intergration_weights
+            (analytical_derivative - num_derivative) ** 2 * det_j * integration_weights
         )
-        h1_sol_norm += np.sum(num_derivative**2 * det_j * intergration_weights)
+        h1_sol_norm += np.sum(num_derivative**2 * det_j * integration_weights)
 
     return EnergyNormsAndErrors(
         l2_error_norm=l2_error_norm**0.5,

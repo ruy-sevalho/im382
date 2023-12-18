@@ -131,100 +131,6 @@ def calc_l2_error_norm(results: pd.DataFrame):
     return np.trapz(results[ERROR_SQUARED], results[X_COORD]) ** 0.5
 
 
-# def calc_l2_h1_error_norms_simplified(
-#     analytical_solution_function: Callable[
-#         [npt.NDArray[np.float64]], npt.NDArray[np.float64]
-#     ],
-#     analytical_derivative_solution_function: Callable[
-#         [npt.NDArray[np.float64]], npt.NDArray[np.float64]
-#     ],
-#     p_knots_global_coords: npt.NDArray[np.float64],
-#     knot_displacements: npt.NDArray[np.float64],
-#     intergration_weights: npt.NDArray[np.float64],
-#     n_ecsi: npt.NDArray[np.float64],
-#     b_ecsi: npt.NDArray[np.float64],
-#     incidence_matrix: npt.NDArray[np.float64],
-#     det_j: float,
-# ):
-#     l2_error_norm = 0
-#     l2_sol_norm = 0
-#     h1_error_norm = 0
-#     h1_sol_norm = 0
-
-#     for e in incidence_matrix:
-#         element_displacements = knot_displacements[e]
-#         p_element = n_ecsi.T @ p_init_global_coords[e]
-#         analitycal_displacement = analytical_solution_function(p_element)
-#         analytical_derivative = analytical_derivative_solution_function(p_element)
-#         num_displacement = n_ecsi.T @ element_displacements
-#         num_derivative = b_ecsi.T @ element_displacements / det_j
-#         l2_error_norm += np.sum(
-#             (analitycal_displacement - num_displacement) ** 2
-#             * intergration_weights
-#             * det_j
-#         )
-#         l2_sol_norm += np.sum(num_displacement**2 * det_j * intergration_weights)
-#         h1_error_norm += np.sum(
-#             (analytical_derivative - num_derivative) ** 2 * det_j * intergration_weights
-#         )
-#         h1_sol_norm += np.sum(num_derivative**2 * det_j * intergration_weights)
-#     return EnergyNormsAndErrors(
-#         l2_error_norm=l2_error_norm**0.5,
-#         l2_sol_norm=l2_sol_norm**0.5,
-#         h1_error_norm=h1_error_norm**0.5,
-#         h1_sol_norm=h1_sol_norm**0.5,
-#     )
-
-
-# def calc_l2_h1_error_norms(
-#     analytical_solution_function: Callable[
-#         [npt.NDArray[np.float64]], npt.NDArray[np.float64]
-#     ],
-#     analytical_derivative_solution_function: Callable[
-#         [npt.NDArray[np.float64]], npt.NDArray[np.float64]
-#     ],
-#     p_init_global_coords: npt.NDArray[np.float64],
-#     knot_displacements: npt.NDArray[np.float64],
-#     intergration_weights: npt.NDArray[np.float64],
-#     n_ecsi: npt.NDArray[np.float64],
-#     b_ecsi: npt.NDArray[np.float64],
-#     incidence_matrix: npt.NDArray[np.float64],
-#     det_j: float,
-# ):
-#     l2_error_norm = 0
-#     l2_sol_norm = 0
-#     h1_error_norm = 0
-#     h1_sol_norm = 0
-
-#     for e in incidence_matrix:
-#         element_displacements = knot_displacements[e]
-#         p_element = n_ecsi.T @ p_init_global_coords[e]
-#         analytical_displacement = analytical_solution_function(p_element)
-#         analytical_derivative = analytical_derivative_solution_function(p_element)
-#         num_displacement = n_ecsi.T @ element_displacements
-#         num_derivative = b_ecsi.T @ element_displacements / det_j
-#         h1_sol_norm += np.sum(num_derivative**2 * det_j * intergration_weights)
-#         l2_sol_norm += np.sum(num_displacement**2 * det_j * intergration_weights)
-
-#         for analytical_sol, analytical_strain, num_sol, num_strain, weight in zip(
-#             analytical_displacement,
-#             analytical_derivative,
-#             num_displacement,
-#             num_derivative,
-#             intergration_weights,
-#         ):
-#             h1_error_norm += (analytical_strain - num_strain) ** 2 * det_j * weight
-#             l2_error_norm += (analytical_sol - num_sol) ** 2 * weight * det_j
-#             pass
-
-#     return EnergyNormsAndErrors(
-#         l2_error_norm=l2_error_norm**0.5,
-#         l2_sol_norm=l2_sol_norm**0.5,
-#         h1_error_norm=h1_error_norm**0.5,
-#         h1_sol_norm=h1_sol_norm**0.5,
-#     )
-
-
 def calc_l2_h1_error_norms(
     analytical_solution_function: Callable[
         [npt.NDArray[np.float64]], npt.NDArray[np.float64]
@@ -234,7 +140,7 @@ def calc_l2_h1_error_norms(
     ],
     p_init_global_coords: npt.NDArray[np.float64],
     knot_displacements: npt.NDArray[np.float64],
-    intergration_weights: npt.NDArray[np.float64],
+    integration_weights: npt.NDArray[np.float64],
     n_ecsi: npt.NDArray[np.float64],
     b_ecsi: npt.NDArray[np.float64],
     incidence_matrix: npt.NDArray[np.float64],
@@ -254,14 +160,14 @@ def calc_l2_h1_error_norms(
         num_derivative = b_ecsi.T @ element_displacements / det_j
         l2_error_norm += np.sum(
             (analitycal_displacement - num_displacement) ** 2
-            * intergration_weights
+            * integration_weights
             * det_j
         )
-        l2_sol_norm += np.sum(num_displacement**2 * det_j * intergration_weights)
+        l2_sol_norm += np.sum(num_displacement**2 * det_j * integration_weights)
         h1_error_norm += np.sum(
-            (analytical_derivative - num_derivative) ** 2 * det_j * intergration_weights
+            (analytical_derivative - num_derivative) ** 2 * det_j * integration_weights
         )
-        h1_sol_norm += np.sum(num_derivative**2 * det_j * intergration_weights)
+        h1_sol_norm += np.sum(num_derivative**2 * det_j * integration_weights)
 
     return EnergyNormsAndErrors(
         l2_error_norm=l2_error_norm**0.5,

@@ -696,7 +696,7 @@ class BarDynamics:
             ),
             p_init_global_coords=self.pre_process.p_coords,
             knot_displacements=results.displacements[-1, :],
-            intergration_weights=self.pre_process.integration_weigths,
+            integration_weights=self.pre_process.integration_weigths,
             n_ecsi=self.pre_process.n_ecsi,
             b_ecsi=self.pre_process.b_ecsi,
             incidence_matrix=self.pre_process.incidence_matrix,
