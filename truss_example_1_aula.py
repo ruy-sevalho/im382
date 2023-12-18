@@ -1,6 +1,7 @@
 import numpy as np
 
-from truss2d import LinearTruss, TrussInputs
+from truss2d import TrussInputs
+from truss_linear import LinearTruss
 
 coords = np.array([[0, 0], [0, 4], [3, 0], [3, 4], [6, 0], [6, 4]])
 incidence = np.array(

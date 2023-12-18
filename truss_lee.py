@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 
 from truss2d import TrussInputs
 from newton_raphson import ConvergenceCriteria, NewtonRaphsonConvergenceParam
-from large_deformation_plasticity import Analysis
+from truss_large_deformation_plastic import Analysis
 
 
 coords = np.array(
@@ -851,7 +851,7 @@ incidence = np.array(
     ]
 )
 boundary_conditions = np.array([[1, 0], [1, 1], [238, 0], [238, 1]])
-loads = np.array([[143, 1, -100]])  # N
+loads = np.array([[143, 1, -1]])  # N
 truss = TrussInputs(
     coords=coords,
     incidences=incidence,
@@ -863,9 +863,9 @@ truss = TrussInputs(
     section_area=1,  # mm2
 )
 convergence_criteria = NewtonRaphsonConvergenceParam(
-    n_load_steps=1000,
+    n_load_steps=100,
     max_iterations=100,
-    precision=1e-5,
+    precision=1e-3,
     convergence_criteria=ConvergenceCriteria.DISPLACEMENT,
 )
 
@@ -875,7 +875,7 @@ res = analysis.results
 
 ax: plt.Axes
 fig, ax = plt.subplots()
-fig.set_dpi(600)
+fig.set_dpi(900)
 x, y = coords[:, 0], coords[:, 1]
 # [plt.text(i, j, f"{n}", size=2) for n, (i, j) in enumerate(zip(x, y))]
 deformed_coords = analysis.deformed_shape()
@@ -883,10 +883,10 @@ for e in incidence:
     ax.plot(
         coords[e][:, 0],
         coords[e][:, 1],
-        linewidth=0.2,
+        linewidth=0.1,
         color="blue",
         linestyle="dashed",
     )
     ax.plot(
-        deformed_coords[e][:, 0], deformed_coords[e][:, 1], linewidth=0.2, color="red"
+        deformed_coords[e][:, 0], deformed_coords[e][:, 1], linewidth=0.1, color="red"
     )

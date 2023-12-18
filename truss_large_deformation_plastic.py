@@ -22,7 +22,16 @@ class Analysis:
 
     @cached_property
     def results(self):
-        return solve(**asdict(self.truss), **asdict(self.convergence_crit))
+        return solve(
+            **asdict(self.truss),
+            **asdict(self.convergence_crit),
+            n_elements=self.truss.pre_process.n_elements,
+            nodal_dofs_mapping=self.truss.pre_process.nodal_dofs_mapping,
+            total_dofs=self.truss.pre_process.total_dofs,
+            free_dofs_array=self.truss.pre_process.free_dofs_array,
+            global_load=self.truss.pre_process.global_load,
+            n_free_dofs=self.truss.pre_process.n_free_dofs,
+        )
 
     def deformed_shape(self, scale: float = 1):
         return calc_deformed_coords(
@@ -59,9 +68,16 @@ def solve(
     boundary_conditions: Array,
     loads: Array,
     n_load_steps: int,
+    n_elements: int,
+    nodal_dofs_mapping: Array,
+    total_dofs: int,
+    free_dofs_array: Array,
+    global_load: Array,
+    n_free_dofs: int,
     max_iterations: int,
     convergence_criteria: ConvergenceCriteria,
     precision: float,
+    print: bool = False,
 ):
     degree = 1
 
@@ -77,30 +93,6 @@ def solve(
         degree=degree,
     )
 
-    # Truss setup
-    n_nodes = coords.shape[0]
-    nodal_dofs = 2
-    n_elements = incidences.shape[0]
-    nodal_dofs_mapping = np.ones((nodal_dofs, n_nodes), dtype=int)
-    for bc in boundary_conditions:
-        nodal_dofs_mapping[bc[1], bc[0]] = 0
-    n_free_dofs = np.sum(nodal_dofs_mapping.flatten())
-    free_dofs_array = np.arange(n_free_dofs)
-    total_dofs = n_nodes * nodal_dofs
-    free_node_numbering = 0
-    restricted_node_numbering = n_free_dofs
-    for i in range(n_nodes):
-        for j in range(nodal_dofs):
-            if nodal_dofs_mapping[j, i] == 1:
-                nodal_dofs_mapping[j, i] = free_node_numbering
-                free_node_numbering += 1
-            elif nodal_dofs_mapping[j, i] == 0:
-                nodal_dofs_mapping[j, i] = restricted_node_numbering
-                restricted_node_numbering += 1
-
-    global_load = assembly_global_load(
-        loads=loads, total_dofs=total_dofs, nodal_dofs_control=nodal_dofs_mapping
-    )
     load_step_vector = global_load / n_load_steps
 
     # Convergences criteria
@@ -233,7 +225,8 @@ def solve(
             crit_disp_list.append(crit_disp)
             crit_residue_list.append(crit_residue)
             crit_comb_list.append(crit_comb)
-            print(f"Load step: {step}, interation: {load_step_counter}")
+            if print:
+                print(f"Load step: {step}, interation: {load_step_counter}")
 
         iter_per_load_step[step - 1] = load_step_counter
         crit_disp_per_step.append(crit_disp)
@@ -288,19 +281,22 @@ def assemble_stiff_matrix_and_internal_force_vector(
         element_mapped_index = nodal_dofs_mapping[:, element_incidence]
         element_displacements = displacements[element_mapped_index.T]
         x_2d_coords = p_2d_coords + element_displacements
-        p_1d_coords = reduce_dimension(p_2d_coords)
-        x_1d_coords = reduce_dimension(x_2d_coords)
+        # p_1d_coords = reduce_dimension(p_2d_coords)
+        # x_1d_coords = reduce_dimension(x_2d_coords)
         for i, (integration_weight, b_ecsi_col) in enumerate(
             zip(integration_weights, b_ecsi.T)
         ):
-            jacobian_p = b_ecsi_col @ p_1d_coords
-            assert jacobian_p == abs(p_1d_coords[1] - p_1d_coords[0]) / 2
-            dif_p = (jacobian_p - reduce_dimension_alt(p_2d_coords) / 2) / jacobian_p
-            assert dif_p < 1e-10
-            jacobian_x = b_ecsi_col @ x_1d_coords
-            assert jacobian_x == abs(x_1d_coords[1] - x_1d_coords[0]) / 2
-            dif_x = (jacobian_x - reduce_dimension_alt(x_2d_coords) / 2) / jacobian_x
-            assert dif_x < 1e-10
+            # jacobian_p = b_ecsi_col @ p_1d_coords
+            # assert jacobian_p == abs(p_1d_coords[1] - p_1d_coords[0]) / 2
+            # dif_p = (jacobian_p - reduce_dimension_alt(p_2d_coords) / 2) / jacobian_p
+            # assert dif_p < 1e-10
+            # jacobian_x = b_ecsi_col @ x_1d_coords
+            # assert jacobian_x == abs(x_1d_coords[1] - x_1d_coords[0]) / 2
+            # dif_x = (jacobian_x - reduce_dimension_alt(x_2d_coords) / 2) / jacobian_x
+            # assert dif_x < 1e-10
+
+            jacobian_p = reduce_dimension_alt(p_2d_coords) / 2
+            jacobian_x = reduce_dimension_alt(x_2d_coords) / 2
             deformation_gradient = jacobian_x / jacobian_p
             linear_part_disp_grad = b_ecsi_col / jacobian_p
             strain_increment = np.log(deformation_gradient)

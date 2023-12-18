@@ -2,7 +2,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-from truss2d import TrussInputs, LinearTruss
+from truss2d import TrussInputs
+from truss_linear import LinearTruss
 
 x = 100 * 3**0.5
 coords = np.array([[0, 0], [x, 0], [2 * x, 0], [x, 100]])

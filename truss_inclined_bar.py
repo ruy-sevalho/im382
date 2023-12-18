@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 
 from truss2d import TrussInputs
 from newton_raphson import NewtonRaphsonConvergenceParam
-from large_deformation_plasticity import Analysis
+from truss_large_deformation_plastic import Analysis
 
 
 coords = np.array([[0, 0], [100, 100]])  ## mm
