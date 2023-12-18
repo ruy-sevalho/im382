@@ -238,6 +238,9 @@ def solve(
         else:
             conv_measure = 1
     return Results(
+        total_dofs=total_dofs,
+        n_free_dofs=n_free_dofs,
+        nodal_dofs_mapping=nodal_dofs_mapping,
         displacements=displacements,
         plastic_strains=plastic_strains,
         alphas=alphas,
