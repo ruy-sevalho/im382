@@ -1,6 +1,6 @@
 from dataclasses import asdict, dataclass, field
 from functools import cached_property
-from logging import warning
+from logging import warning, info
 import numpy as np
 from c0_basis import calc_ecsi_placement_coords_gauss_lobato
 from newton_raphson import ConvergenceCriteria, NewtonRaphsonConvergenceParam
@@ -228,6 +228,7 @@ def solve(
             crit_disp_list.append(crit_disp)
             crit_residue_list.append(crit_residue)
             crit_comb_list.append(crit_comb)
+            print(f"Load step: {step}, interation: {load_step_counter}")
         iter_per_load_step[step - 1] = load_step_counter
 
         crit_disp_per_step.append(crit_disp)

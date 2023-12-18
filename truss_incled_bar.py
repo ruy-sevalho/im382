@@ -1,4 +1,5 @@
 import numpy as np
+import matplotlib.pyplot as plt
 
 from truss2d import TrussInputs
 from newton_raphson import NewtonRaphsonConvergenceParam
@@ -23,5 +24,14 @@ convergence_criteria = NewtonRaphsonConvergenceParam(
     n_load_steps=100, max_iterations=100
 )
 
+ax: plt.Axes
+fig, ax = plt.subplots()
+x, y = coords[:, 0], coords[:, 1]
+ax.scatter(x, y)
+[plt.text(i, j, f"{n}") for n, (i, j) in enumerate(zip(x, y))]
+
+for e in incidence:
+    ax.plot(coords[e][:, 0], coords[e][:, 1])
+
 analysis = Analysis(truss=truss, convergence_crit=convergence_criteria)
-analysis.results
+res = analysis.results
