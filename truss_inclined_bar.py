@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 
 from truss2d import TrussInputs
 from newton_raphson import ConvergenceCriteria, NewtonRaphsonConvergenceParam
-from truss_large_deformation_plastic import Analysis, AnalysisTypes
+from truss_large_deformation_plastic import Analysis
 
 
 coords = np.array([[0, 0], [100, 100]])  ## mm
@@ -21,7 +21,7 @@ truss = TrussInputs(
     section_area=1,  # mm2
 )
 convergence_criteria = NewtonRaphsonConvergenceParam(
-    n_load_steps=2000,
+    n_load_steps=2500,
     max_iterations=100,
     precision=1e-7,
     convergence_criteria=ConvergenceCriteria.DISPLACEMENT,
@@ -31,13 +31,13 @@ convergence_criteria = NewtonRaphsonConvergenceParam(
 analysis = Analysis(truss=truss, convergence_crit=convergence_criteria)
 # res_plastic = analysis.results_rewton_raphson_plastic
 res_hyper = analysis.results_rewton_raphson_hyperelastic
-disp = res_hyper.displacements
-loads = res_hyper.loads
+disp = res_hyper.displacements[:, 0]
+loads = res_hyper.loads[:, 0]
 ax: plt.Axes
 fig, ax = plt.subplots()
 fig.set_dpi(600)
 
-ax.plot(disp[:, 0], loads[:, 0])
+ax.plot(-disp, -loads, scalex=False, scaley=False)
 
 # x, y = coords[:, 0], coords[:, 1]
 # [plt.text(i, j, f"{n}", size=2) for n, (i, j) in enumerate(zip(x, y))]
