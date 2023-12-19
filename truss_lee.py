@@ -871,7 +871,7 @@ convergence_criteria = NewtonRaphsonConvergenceParam(
 
 
 analysis = Analysis(truss=truss, convergence_crit=convergence_criteria)
-res = analysis.results
+res = analysis.results_rewton_raphson_plastic
 
 ax: plt.Axes
 fig, ax = plt.subplots()

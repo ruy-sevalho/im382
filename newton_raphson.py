@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field
 from typing import Protocol
 from enum import Enum
 from functools import cached_property, partial
@@ -8,7 +8,7 @@ import numpy as np
 import numpy.typing as npt
 from bar_1d import EnergyNormsAndErrors
 
-from bar_1d import BarInput, BarInputNonLiner
+from bar_1d import BarInputNonLiner
 from c0_basis import (
     calc_element_1D_jacobian,
     calc_p_knots_global,
@@ -66,7 +66,7 @@ def newton_raphson(
 
     # Initialize convergences criteria
     crit_disp = 1
-    crit_disp_list = []
+    crit_disp_list = np.array([])
     crit_residue = 1
     crit_residue_list = []
     crit_comb = 1
@@ -182,7 +182,7 @@ def newton_raphson(
             }
             conv_measure = table[convergence_criteria]
 
-            crit_disp_list.append(crit_disp)
+            crit_disp_list = np.append(crit_disp_list, crit_disp)
             crit_residue_list.append(crit_residue)
             crit_comb_list.append(crit_comb)
             assert len(crit_comb_list) == total_iter_count
@@ -198,7 +198,7 @@ def newton_raphson(
 
     return NewtonRaphsonResults(
         displacements=disp,
-        crit_disp_list=np.array(crit_disp_list),
+        crit_disp_list=crit_disp_list,
         crit_residue_list=np.array(crit_residue_list),
         crit_comb_list=np.array(crit_comb_list),
         crit_disp_per_step=np.array(crit_comb_per_step),
@@ -248,28 +248,28 @@ def assemble_global_non_linear_stiff_matrix(
         for i in range(n_int_pts):
             # Jacobian matrix of the initial and current configurations on
             # integration point i
-            jacobian_p_i = np.dot(b_ecsi[:, i], element_p_coords)
-            jacobian_x_i = np.dot(b_ecsi[:, i], element_x_coords)
+            jacobian_p = np.dot(b_ecsi[:, i], element_p_coords)
+            jacobian_x = np.dot(b_ecsi[:, i], element_x_coords)
 
             # Computes the tensor of deformation gradient on integration point i
-            grad_p_i = jacobian_x_i / jacobian_p_i
-            cauchy_green_p_1 = grad_p_i**2
+            deformation_gradient = jacobian_x / jacobian_p
+            cauchy_green_p_1 = deformation_gradient**2
 
             # Returns the constitutive matrix on integration point i
-            constitutive_matrix_p_i = (
+            constitutive_matrix_p = (
                 2 * mu + lambda_val - 2 * lambda_val * np.log(np.sqrt(cauchy_green_p_1))
             ) / (cauchy_green_p_1**2)
 
             # Linear part of the displacement gradient tensor on
             # integration point i
-            linear_b_ecsi_p_i = b_ecsi[:, i] / jacobian_p_i
+            linear_part_disp_grad = b_ecsi[:, i] / jacobian_p
 
             # Non-linear part of the displacement gradient tensor
             # on integration point i
-            non_linear_b_ecsi_p_i = linear_b_ecsi_p_i * grad_p_i
+            non_linear_part_disp_grad = linear_part_disp_grad * deformation_gradient
 
             # Returns the Second Piola-Kirchhoff stress on integration point i
-            piolla_kirc_stress_2_i = (
+            piolla_kirc_stress_2 = (
                 mu * (1 - 1 / cauchy_green_p_1)
                 + lambda_val * np.log(np.sqrt(cauchy_green_p_1)) / cauchy_green_p_1
             )
@@ -280,25 +280,26 @@ def assemble_global_non_linear_stiff_matrix(
             element_tangent_siff_m += (
                 (
                     np.outer(
-                        linear_b_ecsi_p_i, piolla_kirc_stress_2_i * linear_b_ecsi_p_i
+                        linear_part_disp_grad,
+                        piolla_kirc_stress_2 * linear_part_disp_grad,
                     )
                     + np.outer(
-                        non_linear_b_ecsi_p_i,
-                        constitutive_matrix_p_i * non_linear_b_ecsi_p_i,
+                        non_linear_part_disp_grad,
+                        constitutive_matrix_p * non_linear_part_disp_grad,
                     )
                 )
                 * int_weights[i]
                 * area
-                * jacobian_p_i
+                * jacobian_p
             )
 
             # Internal force vector
             element_internal_force += (
-                non_linear_b_ecsi_p_i
-                * piolla_kirc_stress_2_i
+                non_linear_part_disp_grad
+                * piolla_kirc_stress_2
                 * int_weights[i]
                 * area
-                * jacobian_p_i
+                * jacobian_p
             )
 
         # Assembles stiffness matrix, the internal force vector, and reaction force vector.

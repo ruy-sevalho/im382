@@ -35,4 +35,4 @@ for i, e in enumerate(incidence):
 fig.legend()
 
 analysis = Analysis(truss=truss, convergence_crit=convergence_criteria)
-res = analysis.results
+res = analysis.results_rewton_raphson_plastic

@@ -14,6 +14,7 @@ class TrussInputs:
     loads: Array
     young_modulus: float
     section_area: float
+    poisson: float = 0.3
     isotropic_hardening: float = None
     yield_stress: float = None
 
@@ -107,3 +108,24 @@ def calc_rotation_matrix(element_coords: Array):
     delta_y = element_coords[1][1] - element_coords[0][1]
     length = (delta_x**2 + delta_y**2) ** 0.5
     return assembly_rotation_matrix(delta_x / length, delta_y / length)
+
+
+def reduce_dimension(element_coords: Array):
+    r = calc_rotation_matrix(element_coords=element_coords)
+    return r @ element_coords.flatten()
+
+
+def reduce_dimension_alt(element_coords: Array):
+    delta_x = element_coords[1][0] - element_coords[0][0]
+    delta_y = element_coords[1][1] - element_coords[0][1]
+    length = (delta_x**2 + delta_y**2) ** 0.5
+    return length
+
+
+def calc_deformed_coords(
+    initial_coords: Array,
+    nodal_dofs_mapping: Array,
+    displacements: Array,
+    factor: float = 1,
+):
+    return initial_coords + displacements[nodal_dofs_mapping.T] * factor
