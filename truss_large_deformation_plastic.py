@@ -80,6 +80,18 @@ class Analysis:
             factor=scale,
         )
 
+    def deformed_shape_from_dips(
+        self,
+        displacements: Array,
+        scale: float = 1,
+    ):
+        return calc_deformed_coords(
+            initial_coords=self.truss.coords,
+            nodal_dofs_mapping=self.truss.pre_process.nodal_dofs_mapping,
+            displacements=displacements,
+            factor=scale,
+        )
+
 
 @dataclass
 class ResultsNewtonRaphson:
@@ -98,6 +110,184 @@ class ResultsNewtonRaphsonPlastic(ResultsNewtonRaphson):
     stresses: Array
     plastic_strains: Array
     alphas: Array
+
+
+def arc_length_hyperelastic(
+    section_area: float,
+    young_modulus: float,
+    poisson: float,
+    coords: Array,
+    incidences: Array,
+    nodal_dofs_mapping: Array,
+    total_dofs: int,
+    free_dofs_array: Array,
+    global_load: Array,
+    n_load_steps: int,
+    max_iterations: int,
+    convergence_criteria: ConvergenceCriteria,
+    precision: float,
+    initial_arc_length: float,
+    intended_iterations: int,
+    print: bool = False,
+):
+    degree = 1
+
+    # Element approximation
+    integration_points, integration_weights = get_points_weights(
+        intorder=2 * degree,
+    )
+    placement_pts_coords = calc_ecsi_placement_coords_gauss_lobato(degree=degree)
+    b_ecsi = d_lagrange_poli(
+        calc_pts_coords=integration_points,
+        placement_pts_coords=placement_pts_coords,
+        degree=degree,
+    )
+
+
+    # Convergences criteria
+    crit_disp = 1
+    crit_disp_list = np.array([])
+    crit_residue = 1
+    crit_residue_list = np.array([])
+    crit_comb = 1
+    crit_comb_list = np.array([])
+
+    crit_disp_per_step = np.array([])
+    crit_residue_per_step = np.array([])
+    crit_comb_per_step = np.array([])
+
+    conv_measure = 1
+
+    # Solution
+    displacements_records = np.zeros(total_dofs)
+    displacements_step = np.zeros(total_dofs)
+    displacements_increment = np.zeros(total_dofs)
+    applied_loads = np.zeros((n_load_steps, total_dofs))
+
+
+    total_iter_count = 0
+    iter_per_load_step = np.zeros(n_load_steps)
+
+    lambdas = np.zeros(1)
+
+
+    while
+
+    for step in range(n_load_steps):
+        load_step_counter = 0
+        residue_init = (step + 1) * load_step_vector
+        applied_loads[step] = residue_init
+        if step == 0:
+            (
+                tangent_stiffness_matrix,
+                internal_load_vector,
+            ) = assemble_stiff_matrix_and_internal_force_vector_non_linear(
+                b_ecsi=b_ecsi,
+                integration_weights=integration_weights,
+                element_incidences=incidences,
+                displacements=displacements_step,
+                element_coords=coords,
+                nodal_dofs_mapping=nodal_dofs_mapping,
+                total_dofs=total_dofs,
+                young_modulus=young_modulus,
+                poisson=poisson,
+                section_area=section_area,
+            )
+        residue = residue_init - internal_load_vector
+
+        # Newton-Raphson iterations
+        while load_step_counter <= max_iterations and conv_measure > precision:
+            load_step_counter += 1  # increment NR iteration counter.
+            total_iter_count += 1  # increment total number of NR iterations.
+
+            tangent_stiffness_matrix_free_nodes = tangent_stiffness_matrix[
+                free_dofs_array[:, np.newaxis], free_dofs_array[np.newaxis, :]
+            ]
+            displacements_increment[free_dofs_array] = np.linalg.solve(
+                tangent_stiffness_matrix_free_nodes, residue[free_dofs_array]
+            )
+            displacements_step[free_dofs_array] += displacements_increment[free_dofs_array]
+
+            if load_step_counter == 1:
+                init_comb_norm = np.sqrt(
+                    np.abs(
+                        np.dot(
+                            residue[free_dofs_array],
+                            displacements_increment[free_dofs_array],
+                        )
+                    )
+                )
+                init_res_norm = np.linalg.norm(residue[free_dofs_array])
+
+            (
+                tangent_stiffness_matrix,
+                internal_load_vector,
+            ) = assemble_stiff_matrix_and_internal_force_vector_non_linear(
+                b_ecsi=b_ecsi,
+                integration_weights=integration_weights,
+                element_incidences=incidences,
+                displacements=displacements_step,
+                element_coords=coords,
+                nodal_dofs_mapping=nodal_dofs_mapping,
+                total_dofs=total_dofs,
+                young_modulus=young_modulus,
+                poisson=poisson,
+                section_area=section_area,
+            )
+            residue = residue_init - internal_load_vector
+
+            crit_comb = np.sqrt(
+                np.abs(
+                    np.dot(
+                        residue[free_dofs_array],
+                        displacements_increment[free_dofs_array],
+                    )
+                )
+            )
+            crit_residue = np.linalg.norm(residue[free_dofs_array])
+
+            if init_comb_norm:
+                crit_comb = crit_comb / init_comb_norm
+            if init_res_norm:
+                crit_residue = crit_residue / init_res_norm
+
+            crit_disp = np.linalg.norm(displacements_increment[free_dofs_array])
+            disp_norm = np.linalg.norm(displacements_step[free_dofs_array])
+            if disp_norm:
+                crit_disp = crit_disp / disp_norm
+
+            table = {
+                ConvergenceCriteria.WORK: crit_comb,
+                ConvergenceCriteria.DISPLACEMENT: crit_disp,
+                ConvergenceCriteria.FORCE: crit_residue,
+            }
+            conv_measure = table[convergence_criteria]
+            crit_disp_list = np.append(crit_disp_list, crit_disp)
+            crit_residue_list = np.append(crit_residue_list, crit_residue)
+            crit_comb_list = np.append(crit_comb_list, crit_comb)
+            if print:
+                print(f"Load step: {step}, interation: {load_step_counter}")
+
+        displacements_records[step] = displacements_step
+        iter_per_load_step[step] = load_step_counter
+        crit_disp_per_step = np.append(crit_disp_per_step, crit_disp)
+        crit_residue_per_step = np.append(crit_residue_per_step, crit_residue)
+        crit_comb_per_step = np.append(crit_comb_per_step, crit_comb)
+        if load_step_counter > max_iterations:
+            warning(f"No conversion in load step {step}")
+        else:
+            conv_measure = 1
+
+    return ResultsNewtonRaphson(
+        loads=applied_loads,
+        displacements=displacements_records,
+        crit_disp_list=crit_disp_list,
+        crit_residue_list=crit_residue_list,
+        crit_comb_list=crit_comb_list,
+        crit_disp_per_step=crit_comb_per_step,
+        crit_residue_per_step=crit_residue_per_step,
+        crit_comb_per_step=crit_comb_per_step,
+    )
 
 
 def newton_raphson_hyperelastic(
@@ -122,7 +312,6 @@ def newton_raphson_hyperelastic(
     integration_points, integration_weights = get_points_weights(
         intorder=2 * degree,
     )
-    n_integration_pts = integration_points.shape[0]
     placement_pts_coords = calc_ecsi_placement_coords_gauss_lobato(degree=degree)
     b_ecsi = d_lagrange_poli(
         calc_pts_coords=integration_points,

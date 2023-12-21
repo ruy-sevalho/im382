@@ -500,7 +500,7 @@ class BarAnalysis:
     def b_ecsi(self, ecsi: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
         return self.pre_process.b_ecsi_function(calc_pts_coords=ecsi)
 
-    def result_df(self, esci_calc_pts: npt.NDArray[np.float64] | None = None):
+    def results(self, esci_calc_pts: npt.NDArray[np.float64] | None = None):
         if esci_calc_pts is None:
             esci_calc_pts = np.linspace(-1, 1, 21)
         return calc_approx_value(
@@ -526,6 +526,14 @@ class BarAnalysis:
             incidence_matrix=self.pre_process.incidence_matrix,
             det_j=self.pre_process.det_j,
         )
+
+    @cached_property
+    def h1_error(self):
+        return self.error_norms.h1_error_norm
+
+    @cached_property
+    def l2_error(self):
+        return self.error_norms.l2_error_norm
 
 
 @dataclass

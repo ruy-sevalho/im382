@@ -1,3 +1,5 @@
+from dataclasses import replace
+from functools import partial
 import numpy as np
 import sympy as sy
 import matplotlib.pyplot as plt
@@ -79,18 +81,18 @@ def normal_force_manual(p: float):
     return stress_1_pk_manual(p) * section_area
 
 
-bar = BarInputNonLiner(
+bar_p_study = BarInputNonLiner(
     young_modulus=young_modulus,
     section_area=section_area,
     length=length,
     degree=1,
-    n_elements=n_elements,
+    n_elements=2,
     load_function=dist_load_num,
     poisson=poisson,
     load_at_end=load_at_end,
 )
 
-bar_c1 = BarInputNonLiner(
+bar_h_study = BarInputNonLiner(
     young_modulus=young_modulus,
     section_area=section_area,
     length=length,
@@ -108,72 +110,193 @@ convernge_criteria = NewtonRaphsonConvergenceParam(
     precision=1e-7,
 )
 
-analysis = BarAnalysis(
-    inputs=C0BarAnalysisInput(
-        bar_input=bar,
-        ecsi_placement_pts_function=calc_ecsi_placement_coords_gauss_lobato,
-    ),
-    analytical_solution_function=displacement_analytical_num,
-    analytical_derivative_solution_function=derivative_displacement_analytical_num,
-    convergence_crit=convernge_criteria,
+c0_bar_analysis_generator = partial(
+    C0BarAnalysisInput,
+    ecsi_placement_pts_function=calc_ecsi_placement_coords_gauss_lobato,
 )
 
-analysis_c1 = BarAnalysis(
-    inputs=C1BarAnalysisInput(bar_input=bar_c1),
-    convergence_crit=convernge_criteria,
+analysis_generator = partial(
+    BarAnalysis,
     analytical_solution_function=displacement_analytical_num,
     analytical_derivative_solution_function=derivative_displacement_analytical_num,
+    convergence_crit=convernge_criteria,
 )
 
 n_elements_cases = (4, 6, 8, 10)
 degrees = (3, 4, 5, 6)
 
 
+h_study_c0: dict[int, BarAnalysis] = dict()
+p_study_c0: dict[int, BarAnalysis] = dict()
+h_study_c1: dict[int, BarAnalysis] = dict()
+p_study_c1: dict[int, BarAnalysis] = dict()
 
-ax: plt.Axes
-fig, ax = plt.subplots()
+for n_elements in n_elements_cases:
+    bar_input = replace(bar_h_study, n_elements=n_elements)
+    c0_model = c0_bar_analysis_generator(bar_input=bar_input)
+    c1_model = C1BarAnalysisInput(bar_input=bar_input)
+    h_study_c0[n_elements] = analysis_generator(inputs=c0_model)
+    h_study_c1[n_elements] = analysis_generator(inputs=c1_model)
 
-col_pts = analysis.pre_process.collocation_pts
-col_pts_c1 = analysis_c1.pre_process.collocation_pts
-x_knots_c1 = analysis_c1.pre_process.x_knots_global
+
+for degree in degrees:
+    bar_input = replace(bar_p_study, degree=degree)
+    c0_model = c0_bar_analysis_generator(bar_input=bar_input)
+    c1_model = C1BarAnalysisInput(bar_input=bar_input)
+    p_study_c0[degree] = analysis_generator(inputs=c0_model)
+    p_study_c1[degree] = analysis_generator(inputs=c1_model)
+
+
+degrees_freedom_h = tuple(
+    case.pre_process.n_degrees_freedom for case in h_study_c1.values()
+)
+l2_error_h_c0 = tuple(case.l2_error for case in h_study_c0.values())
+l2_error_h_c1 = tuple(case.l2_error for case in h_study_c1.values())
+
+h1_error_h_c0 = tuple(case.h1_error for case in h_study_c0.values())
+h1_error_h_c1 = tuple(case.h1_error for case in h_study_c1.values())
+
+
+degrees_freedom_p = tuple(
+    case.pre_process.n_degrees_freedom for case in p_study_c1.values()
+)
+l2_error_p_c0 = tuple(case.l2_error for case in p_study_c0.values())
+l2_error_p_c1 = tuple(case.l2_error for case in p_study_c1.values())
+
+
+h1_error_p_c0 = tuple(case.h1_error for case in p_study_c0.values())
+h1_error_p_c1 = tuple(case.h1_error for case in p_study_c1.values())
+
+dfs = [
+    (
+        case.results(),
+        case.inputs.bar_input.degree,
+        case.inputs.bar_input.n_elements,
+    )
+    for case in h_study_c0.values()
+]
+
+dfs += [
+    (
+        case.results(),
+        case.inputs.bar_input.degree,
+        case.inputs.bar_input.n_elements,
+    )
+    for case in p_study_c0.values()
+]
+
+
+dfs_c1 = [
+    (
+        case.results(),
+        case.inputs.bar_input.degree,
+        case.inputs.bar_input.n_elements,
+    )
+    for case in h_study_c1.values()
+]
+
+dfs_c1 += [
+    (
+        case.results(),
+        case.inputs.bar_input.degree,
+        case.inputs.bar_input.n_elements,
+    )
+    for case in p_study_c1.values()
+]
+
+
+def plot_result(ax, result_df, key: str, name: str = "displacement"):
+    ax.plot(result_df[X_COORD], result_df[key], label=name)
+
+
+def plot_results(ax, result_dfs, key: str, name: str = "displacement"):
+    for i, r in enumerate(result_dfs):
+        plot_result(ax, r, key, f"{name} {i+2}")
+
+
+ax3: plt.Axes
+fig3, ax3 = plt.subplots()
+ax3.set_title("$h$ ref")
+ax3.set_xlabel("degrees of freedom")
+ax3.set_ylabel("$l_2$ error")
+ax3.loglog(degrees_freedom_h, l2_error_h_c0, label="$C_0$")
+ax3.loglog(degrees_freedom_h, l2_error_h_c1, label="$C_1$")
+fig3.legend()
+fig3.savefig("ex31fig\l2 h ref")
+
+ax4: plt.Axes
+fig4, ax4 = plt.subplots()
+ax4.set_title("$p$ ref")
+ax4.set_xlabel("degrees of freedom")
+ax4.set_ylabel("$l_2$ error")
+ax4.loglog(degrees_freedom_p, l2_error_p_c0, label="$C_0$")
+ax4.loglog(degrees_freedom_p, l2_error_p_c1, label="$C_1$")
+fig4.legend()
+fig4.savefig("ex31fig\l2 p ref")
+
+ax5: plt.Axes
+fig5, ax5 = plt.subplots()
+ax5.set_title("$h$ ref")
+ax5.set_xlabel("degrees of freedom")
+ax5.set_ylabel("$h_1$ error")
+ax5.loglog(degrees_freedom_h, h1_error_h_c0, label="$C_0$")
+ax5.loglog(degrees_freedom_h, h1_error_h_c1, label="$C_1$")
+fig5.legend()
+fig5.savefig("ex31fig\h1 h ref")
+
+
+ax6: plt.Axes
+fig6, ax6 = plt.subplots()
+ax6.set_title("$p$ ref")
+ax6.set_xlabel("degrees of freedom")
+ax6.set_ylabel("$h_1$ error")
+ax6.loglog(degrees_freedom_p, h1_error_p_c0, label="$C_0$")
+ax6.loglog(degrees_freedom_p, h1_error_p_c1, label="$C_1$")
+fig6.legend()
+fig6.savefig("ex31fig\h1 p ref")
+
+
+study = h_study_c0[n_elements_cases[0]]
+col_pts = study.pre_process.collocation_pts
+col_pts_c1 = study.pre_process.collocation_pts
+x_knots_c1 = study.pre_process.x_knots_global
 col_pts_sorted = np.sort(col_pts)
-element_incidence = analysis.pre_process.incidence_matrix
-element_incidence_c1 = analysis_c1.pre_process.incidence_matrix
-col_pt_el1 = col_pts[element_incidence[1]]
-col_pt_el1_c1 = col_pts_c1[element_incidence_c1[1]]
 
 
-
-
-
-
-res_df_c0 = analysis.result_df()
-res_df_c1 = analysis_c1.result_df()
-errors_c0 = analysis.error_norms
-errors_c1 = analysis_c1.error_norms
-
-
-ax.plot(
+ax_disp: plt.Axes
+fig_disp, ax_disp = plt.subplots()
+ax_disp.set_xlabel("$x$ (m)")
+ax_disp.set_ylabel("displacement (m)")
+ax_disp.set_title("$C_0$ displacement")
+for df, degree, n in dfs:
+    plot_result(
+        ax=ax_disp, result_df=df, key=NUM_DISPLACEMENT, name=f"$p={degree}, n={n}$"
+    )
+ax_disp.plot(
     col_pts_sorted,
     [displacement_analytical_num(pt) for pt in col_pts_sorted],
     label="analytical",
 )
-ax.plot(res_df_c0[X_COORD], res_df_c0[NUM_DISPLACEMENT], label="C0")
-ax.plot(res_df_c1[X_COORD], res_df_c1[NUM_DISPLACEMENT], label="C0")
-fig.set_dpi(1000)
-fig.legend()
+fig_disp.legend(loc="right")
+fig_disp.set_dpi(1000)
+fig_disp.savefig("ex31fig\c0 disp")
 
+ax_disp2: plt.Axes
+fig_disp2, ax_disp2 = plt.subplots()
+ax_disp2.set_xlabel("$x$ (m)")
+ax_disp2.set_ylabel("displacement (m)")
+ax_disp2.set_title("$C_1$ displacement")
+for df, degree, n in dfs_c1:
+    plot_result(
+        ax=ax_disp2, result_df=df, key=NUM_DISPLACEMENT, name=f"$p={degree}, n={n}$"
+    )
 
-criteria = analysis_c1.bar_result
-crit_disp_per_step = criteria.crit_disp_per_step
-crit_residue_per_step = criteria.crit_residue_per_step
-crit_comb_per_step = criteria.crit_residue_per_step
-crit_disp_list = criteria.crit_disp_list
-crit_residue_list = criteria.crit_residue_list
-crit_comb_list = criteria.crit_comb_list
+ax_disp2.plot(
+    col_pts_sorted,
+    [displacement_analytical_num(pt) for pt in col_pts_sorted],
+    label="analytical",
+)
 
-
-print(f"c0 h1: {errors_c0.h1_error_norm}")
-print(f"c0 l2: {errors_c0.l2_error_norm}")
-print(f"c1 h1: {errors_c1.h1_error_norm}")
-print(f"c1 l2: {errors_c1.l2_error_norm}")
+fig_disp2.legend(loc="right")
+fig_disp2.set_dpi(1000)
+fig_disp2.savefig("ex31fig\c1 disp")
