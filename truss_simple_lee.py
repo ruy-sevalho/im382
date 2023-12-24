@@ -34,5 +34,5 @@ for i, e in enumerate(incidence):
     ax.plot(coords[e][:, 0], coords[e][:, 1], label=i)
 fig.legend()
 
-analysis = Analysis(truss=truss, convergence_crit=convergence_criteria)
+analysis = Analysis(truss=truss, newton_raphson_convergence_crit=convergence_criteria)
 res = analysis.results_rewton_raphson_plastic

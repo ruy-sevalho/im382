@@ -222,8 +222,11 @@ for degree in degrees:
     )
 
 
-fig.legend()
+fig.legend(loc="right")
 delta_t2 = time() - t1
 print(error_df)
+print(error_df.to_latex(float_format="{{:.2E}}".format))
 
+ax.set_xlabel("$p$ (m)")
+ax.set_ylabel("displacement at $t_{final}$ (m)")
 # %%

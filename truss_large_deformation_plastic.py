@@ -5,6 +5,7 @@ from logging import warning
 import numpy as np
 from c0_basis import calc_ecsi_placement_coords_gauss_lobato
 from lame import calc_lambda, calc_mu
+from matrix_simplification import map_free_degrees
 from newton_raphson import ConvergenceCriteria, NewtonRaphsonConvergenceParam
 from polynomials import d_lagrange_poli, get_points_weights
 from truss2d import (
@@ -22,16 +23,55 @@ class AnalysisTypes(Enum):
 
 
 @dataclass
+class ArcLengthConvergenceCriteria:
+    precision: float = 1e-6
+    convergance_criteria: ConvergenceCriteria = ConvergenceCriteria.FORCE
+    intended_iterations_per_step: int = 10
+    initial_arc_length: float = 1
+    max_arc_length_ratio: float = 10
+    min_arc_length_ratio: float = 0.1
+    max_steps: int = 100
+    max_iterations: int = 100
+    psi: float = 1
+
+
+@dataclass
 class Analysis:
     truss: TrussInputs
-    convergence_crit: NewtonRaphsonConvergenceParam = field(
+    newton_raphson_convergence_crit: NewtonRaphsonConvergenceParam = field(
         default_factory=NewtonRaphsonConvergenceParam
     )
+    arc_length_convergence_crit: ArcLengthConvergenceCriteria = field(
+        default_factory=ArcLengthConvergenceCriteria
+    )
+
+    @cached_property
+    def results_arc_length_hyperelastic(self):
+        return arc_length_hyperelastic(
+            section_area=self.truss.section_area,
+            young_modulus=self.truss.young_modulus,
+            poisson=self.truss.poisson,
+            coords=self.truss.coords,
+            incidences=self.truss.incidences,
+            nodal_dofs_mapping=self.truss.pre_process.nodal_dofs_mapping,
+            total_dofs=self.truss.pre_process.total_dofs,
+            free_dofs_array=self.truss.pre_process.free_dofs_array,
+            global_load=self.truss.pre_process.global_load,
+            convergence_criteria=self.arc_length_convergence_crit.convergance_criteria,
+            max_iterations=self.arc_length_convergence_crit.max_iterations,
+            precision=self.arc_length_convergence_crit.precision,
+            max_load_steps=self.arc_length_convergence_crit.max_steps,
+            initial_arc_length=self.arc_length_convergence_crit.initial_arc_length,
+            max_arc_length_ratio=self.arc_length_convergence_crit.max_arc_length_ratio,
+            min_arc_length_ratio=self.arc_length_convergence_crit.min_arc_length_ratio,
+            intended_iterations=self.arc_length_convergence_crit.intended_iterations_per_step,
+            psi=self.arc_length_convergence_crit.psi,
+        )
 
     @cached_property
     def results_rewton_raphson_plastic(self):
         return newton_raphson_plastic(
-            **asdict(self.convergence_crit),
+            **asdict(self.newton_raphson_convergence_crit),
             section_area=self.truss.section_area,
             young_modulus=self.truss.young_modulus,
             isotropic_hardening=self.truss.isotropic_hardening,
@@ -48,7 +88,7 @@ class Analysis:
     @cached_property
     def results_rewton_raphson_hyperelastic(self):
         return newton_raphson_hyperelastic(
-            **asdict(self.convergence_crit),
+            **asdict(self.newton_raphson_convergence_crit),
             section_area=self.truss.section_area,
             young_modulus=self.truss.young_modulus,
             poisson=self.truss.poisson,
@@ -94,6 +134,19 @@ class Analysis:
 
 
 @dataclass
+class ResultsArcLengthHyperelastic:
+    displacements: Array
+    lambdas: Array
+    displacements: Array
+    crit_disp_list: Array
+    crit_residue_list: Array
+    crit_comb_list: Array
+    crit_disp_per_step: Array
+    crit_residue_per_step: Array
+    crit_comb_per_step: Array
+
+
+@dataclass
 class ResultsNewtonRaphson:
     loads: Array
     displacements: Array
@@ -122,15 +175,21 @@ def arc_length_hyperelastic(
     total_dofs: int,
     free_dofs_array: Array,
     global_load: Array,
-    n_load_steps: int,
     max_iterations: int,
     convergence_criteria: ConvergenceCriteria,
     precision: float,
+    max_load_steps: int,
     initial_arc_length: float,
+    max_arc_length_ratio: float,
+    min_arc_length_ratio: float,
     intended_iterations: int,
+    psi: float = 1,
     print: bool = False,
 ):
+    min_arc_lenght = min_arc_length_ratio * initial_arc_length
+    max_arc_length = max_arc_length_ratio * initial_arc_length
     degree = 1
+    n_degrees_freedom = free_dofs_array.shape[0]
 
     # Element approximation
     integration_points, integration_weights = get_points_weights(
@@ -142,7 +201,6 @@ def arc_length_hyperelastic(
         placement_pts_coords=placement_pts_coords,
         degree=degree,
     )
-
 
     # Convergences criteria
     crit_disp = 1
@@ -159,25 +217,117 @@ def arc_length_hyperelastic(
     conv_measure = 1
 
     # Solution
-    displacements_records = np.zeros(total_dofs)
-    displacements_step = np.zeros(total_dofs)
-    displacements_increment = np.zeros(total_dofs)
-    applied_loads = np.zeros((n_load_steps, total_dofs))
-
-
-    total_iter_count = 0
-    iter_per_load_step = np.zeros(n_load_steps)
-
+    displacements = np.array([np.zeros(total_dofs)])
+    iter_per_load_step = np.array([])
     lambdas = np.zeros(1)
+    step = 0
+    arc_length = initial_arc_length
 
+    # Arc-length step
+    while lambdas[-1] < 0.99 and step < max_load_steps:
+        displacements = np.vstack((displacements, displacements[-1]))
+        lambdas = np.append(lambdas, lambdas[-1])
+        iter = 0
+        delta_lambda = 0
+        delta_displacements = np.zeros(n_degrees_freedom)
+        conv_measure = 1
+        del_displacements_bar = np.zeros(n_degrees_freedom)
+        (
+            tangent_stiffness_matrix,
+            internal_load_vector,
+        ) = assemble_stiff_matrix_and_internal_force_vector_non_linear(
+            b_ecsi=b_ecsi,
+            integration_weights=integration_weights,
+            element_incidences=incidences,
+            displacements=displacements[-1],
+            element_coords=coords,
+            nodal_dofs_mapping=nodal_dofs_mapping,
+            total_dofs=total_dofs,
+            young_modulus=young_modulus,
+            poisson=poisson,
+            section_area=section_area,
+        )
+        del_displacements_t = np.linalg.solve(
+            map_free_degrees(
+                matrix=tangent_stiffness_matrix,
+                free_dofs_array=free_dofs_array,
+            ),
+            global_load[free_dofs_array],
+        )
 
-    while
+        a1_a2_a3_coef = calc_a_coef(
+            delta_displacements=delta_displacements,
+            del_displacements_bar=del_displacements_bar,
+            del_displacements_t=del_displacements_t,
+            psi=psi,
+            delta_lambda=delta_lambda,
+            global_load=global_load,
+            arc_length=arc_length,
+        )
+        del_lambdas = np.roots(a1_a2_a3_coef)
+        sign_del_lambdas = {sign: id for id, sign in enumerate(np.sign(del_lambdas))}
+        det_sign = np.sign(
+            np.linalg.det(
+                map_free_degrees(
+                    matrix=tangent_stiffness_matrix,
+                    free_dofs_array=free_dofs_array,
+                )
+            )
+        )
+        i = int(sign_del_lambdas[det_sign])
+        del_lambda = del_lambdas[i]
+        del_displacements = del_displacements_bar + del_lambda * del_displacements_t
 
-    for step in range(n_load_steps):
-        load_step_counter = 0
-        residue_init = (step + 1) * load_step_vector
-        applied_loads[step] = residue_init
-        if step == 0:
+        # Arc Length iterations
+        while iter <= max_iterations and conv_measure > precision:
+            if iter > 0:
+                del_displacements_t = np.linalg.solve(
+                    map_free_degrees(
+                        matrix=tangent_stiffness_matrix,
+                        free_dofs_array=free_dofs_array,
+                    ),
+                    global_load[free_dofs_array],
+                )
+                del_displacements_bar = -np.linalg.solve(
+                    map_free_degrees(
+                        matrix=tangent_stiffness_matrix,
+                        free_dofs_array=free_dofs_array,
+                    ),
+                    internal_load_vector[free_dofs_array]
+                    - (lambdas[-1] + delta_lambda) * global_load[free_dofs_array],
+                )
+                a1_a2_a3_coef = calc_a_coef(
+                    delta_displacements=delta_displacements,
+                    del_displacements_bar=del_displacements_bar,
+                    del_displacements_t=del_displacements_t,
+                    psi=psi,
+                    delta_lambda=delta_lambda,
+                    global_load=global_load,
+                    arc_length=arc_length,
+                )
+                del_lambdas = np.roots(a1_a2_a3_coef)
+                del_displacements_values = np.array(
+                    [
+                        del_displacements_bar + del_lambda_ * del_displacements_t
+                        for del_lambda_ in del_lambdas
+                    ]
+                )
+                i = int(
+                    choose_del_lambda(
+                        delta_displacements=delta_displacements,
+                        del_displacements_values=del_displacements_values,
+                        delta_lambda=delta_lambda,
+                        del_lambdas=del_lambdas,
+                        global_load=global_load,
+                        psi=psi,
+                    )
+                )
+                del_lambda = del_lambdas[i]
+                del_displacements = del_displacements_values[i]
+
+            delta_displacements += del_displacements
+            delta_lambda += del_lambda
+            displacements[-1][free_dofs_array] += del_displacements
             (
                 tangent_stiffness_matrix,
                 internal_load_vector,
@@ -185,7 +335,7 @@ def arc_length_hyperelastic(
                 b_ecsi=b_ecsi,
                 integration_weights=integration_weights,
                 element_incidences=incidences,
-                displacements=displacements_step,
+                displacements=displacements[-1],
                 element_coords=coords,
                 nodal_dofs_mapping=nodal_dofs_mapping,
                 total_dofs=total_dofs,
@@ -193,54 +343,24 @@ def arc_length_hyperelastic(
                 poisson=poisson,
                 section_area=section_area,
             )
-        residue = residue_init - internal_load_vector
+            residue = global_load * (lambdas[-1] + delta_lambda) - internal_load_vector
 
-        # Newton-Raphson iterations
-        while load_step_counter <= max_iterations and conv_measure > precision:
-            load_step_counter += 1  # increment NR iteration counter.
-            total_iter_count += 1  # increment total number of NR iterations.
-
-            tangent_stiffness_matrix_free_nodes = tangent_stiffness_matrix[
-                free_dofs_array[:, np.newaxis], free_dofs_array[np.newaxis, :]
-            ]
-            displacements_increment[free_dofs_array] = np.linalg.solve(
-                tangent_stiffness_matrix_free_nodes, residue[free_dofs_array]
-            )
-            displacements_step[free_dofs_array] += displacements_increment[free_dofs_array]
-
-            if load_step_counter == 1:
+            if iter == 0:
                 init_comb_norm = np.sqrt(
                     np.abs(
                         np.dot(
                             residue[free_dofs_array],
-                            displacements_increment[free_dofs_array],
+                            delta_displacements[free_dofs_array],
                         )
                     )
                 )
                 init_res_norm = np.linalg.norm(residue[free_dofs_array])
 
-            (
-                tangent_stiffness_matrix,
-                internal_load_vector,
-            ) = assemble_stiff_matrix_and_internal_force_vector_non_linear(
-                b_ecsi=b_ecsi,
-                integration_weights=integration_weights,
-                element_incidences=incidences,
-                displacements=displacements_step,
-                element_coords=coords,
-                nodal_dofs_mapping=nodal_dofs_mapping,
-                total_dofs=total_dofs,
-                young_modulus=young_modulus,
-                poisson=poisson,
-                section_area=section_area,
-            )
-            residue = residue_init - internal_load_vector
-
             crit_comb = np.sqrt(
                 np.abs(
                     np.dot(
                         residue[free_dofs_array],
-                        displacements_increment[free_dofs_array],
+                        delta_displacements[free_dofs_array],
                     )
                 )
             )
@@ -251,8 +371,8 @@ def arc_length_hyperelastic(
             if init_res_norm:
                 crit_residue = crit_residue / init_res_norm
 
-            crit_disp = np.linalg.norm(displacements_increment[free_dofs_array])
-            disp_norm = np.linalg.norm(displacements_step[free_dofs_array])
+            crit_disp = np.linalg.norm(delta_displacements[free_dofs_array])
+            disp_norm = np.linalg.norm(delta_displacements[free_dofs_array])
             if disp_norm:
                 crit_disp = crit_disp / disp_norm
 
@@ -262,25 +382,30 @@ def arc_length_hyperelastic(
                 ConvergenceCriteria.FORCE: crit_residue,
             }
             conv_measure = table[convergence_criteria]
-            crit_disp_list = np.append(crit_disp_list, crit_disp)
-            crit_residue_list = np.append(crit_residue_list, crit_residue)
-            crit_comb_list = np.append(crit_comb_list, crit_comb)
+            crit_disp_list = np.hstack((crit_disp_list, crit_disp))
+            crit_residue_list = np.hstack((crit_residue_list, crit_residue))
+            crit_comb_list = np.hstack((crit_comb_list, crit_comb))
+            iter += 1
             if print:
-                print(f"Load step: {step}, interation: {load_step_counter}")
+                print(f"Load step: {step}, interation: {iter}")
 
-        displacements_records[step] = displacements_step
-        iter_per_load_step[step] = load_step_counter
-        crit_disp_per_step = np.append(crit_disp_per_step, crit_disp)
-        crit_residue_per_step = np.append(crit_residue_per_step, crit_residue)
-        crit_comb_per_step = np.append(crit_comb_per_step, crit_comb)
-        if load_step_counter > max_iterations:
+        lambdas[-1] = lambdas[-1] + delta_lambda
+        iter_per_load_step = np.hstack((iter_per_load_step, iter))
+        crit_disp_per_step = np.hstack((crit_disp_per_step, crit_disp))
+        crit_residue_per_step = np.hstack((crit_residue_per_step, crit_residue))
+        crit_comb_per_step = np.hstack((crit_comb_per_step, crit_comb))
+        arc_length = arc_length * (intended_iterations / iter) ** 0.5
+        arc_length = max(min_arc_lenght, min(max_arc_length, arc_length))
+        step += 1
+
+        if iter > max_iterations:
             warning(f"No conversion in load step {step}")
         else:
             conv_measure = 1
 
-    return ResultsNewtonRaphson(
-        loads=applied_loads,
-        displacements=displacements_records,
+    return ResultsArcLengthHyperelastic(
+        displacements=displacements,
+        lambdas=lambdas,
         crit_disp_list=crit_disp_list,
         crit_residue_list=crit_residue_list,
         crit_comb_list=crit_comb_list,
@@ -433,17 +558,17 @@ def newton_raphson_hyperelastic(
                 ConvergenceCriteria.FORCE: crit_residue,
             }
             conv_measure = table[convergence_criteria]
-            crit_disp_list = np.append(crit_disp_list, crit_disp)
-            crit_residue_list = np.append(crit_residue_list, crit_residue)
-            crit_comb_list = np.append(crit_comb_list, crit_comb)
+            crit_disp_list = np.hstack((crit_disp_list, crit_disp))
+            crit_residue_list = np.hstack((crit_residue_list, crit_residue))
+            crit_comb_list = np.hstack((crit_comb_list, crit_comb))
             if print:
                 print(f"Load step: {step}, interation: {load_step_counter}")
 
         displacements_records[step] = displacements
         iter_per_load_step[step] = load_step_counter
-        crit_disp_per_step = np.append(crit_disp_per_step, crit_disp)
-        crit_residue_per_step = np.append(crit_residue_per_step, crit_residue)
-        crit_comb_per_step = np.append(crit_comb_per_step, crit_comb)
+        crit_disp_per_step = np.hstack((crit_disp_per_step, crit_disp))
+        crit_residue_per_step = np.hstack((crit_residue_per_step, crit_residue))
+        crit_comb_per_step = np.hstack((crit_comb_per_step, crit_comb))
         if load_step_counter > max_iterations:
             warning(f"No conversion in load step {step}")
         else:
@@ -624,17 +749,17 @@ def newton_raphson_plastic(
                 ConvergenceCriteria.FORCE: crit_residue,
             }
             conv_measure = table[convergence_criteria]
-            crit_disp_list = np.append(crit_disp_list, crit_disp)
-            crit_residue_list = np.append(crit_residue_list, crit_residue)
-            crit_comb_list = np.append(crit_comb_list, crit_comb)
+            crit_disp_list = np.hstack(crit_disp_list, crit_disp)
+            crit_residue_list = np.hstack(crit_residue_list, crit_residue)
+            crit_comb_list = np.hstack(crit_comb_list, crit_comb)
             if print:
                 print(f"Load step: {step}, interation: {load_step_counter}")
 
         displacements_records[step] = displacements
         iter_per_load_step[step] = load_step_counter
-        crit_disp_per_step = np.append(crit_disp_per_step, crit_disp)
-        crit_residue_per_step = np.append(crit_residue_per_step, crit_residue)
-        crit_comb_per_step = np.append(crit_comb_per_step, crit_comb)
+        crit_disp_per_step = np.hstack(crit_disp_per_step, crit_disp)
+        crit_residue_per_step = np.hstack(crit_residue_per_step, crit_residue)
+        crit_comb_per_step = np.hstack(crit_comb_per_step, crit_comb)
         if load_step_counter > max_iterations:
             warning(f"No conversion in load step {step}")
         else:
@@ -902,3 +1027,114 @@ def return_mapping_isotropic_hardening(
         new_alpha = alpha + delta_lambda
         elastoplastic_modulus = young_modulus * isotropic_hardening / corrected_modulus
     return new_stress, new_plastic_strain, new_alpha, elastoplastic_modulus
+
+
+def calc_a1(del_displacements_t: Array, psi: float, global_load: Array):
+    return (
+        del_displacements_t @ del_displacements_t + psi**2 * global_load @ global_load
+    )
+
+
+def calc_a2(
+    delta_displacements: Array,
+    del_displacements_bar: Array,
+    del_displacements_t,
+    psi: float,
+    delta_lambda: Array,
+    global_load: Array,
+):
+    return (
+        2 * (delta_displacements + del_displacements_bar) @ del_displacements_t
+        + 2 * psi**2 * delta_lambda * global_load @ global_load
+    )
+
+
+def calc_a3(
+    delta_displacements: Array,
+    del_displacements_bar: Array,
+    del_displacements_t,
+    psi: float,
+    delta_lambda: Array,
+    global_load: Array,
+    arc_length: float,
+):
+    return (
+        (delta_displacements + del_displacements_bar)
+        @ (delta_displacements + del_displacements_bar)
+        + psi**2 * delta_lambda**2 * global_load @ global_load
+        - arc_length**2
+    )
+
+
+def calc_a_coef(
+    delta_displacements: Array,
+    del_displacements_bar: Array,
+    del_displacements_t: Array,
+    psi: float,
+    delta_lambda: Array,
+    global_load: Array,
+    arc_length: float,
+):
+    a1 = calc_a1(
+        del_displacements_t=del_displacements_t, psi=psi, global_load=global_load
+    )
+    a2 = calc_a2(
+        delta_displacements=delta_displacements,
+        del_displacements_bar=del_displacements_bar,
+        del_displacements_t=del_displacements_t,
+        psi=psi,
+        delta_lambda=delta_lambda,
+        global_load=global_load,
+    )
+    a3 = calc_a3(
+        delta_displacements=delta_displacements,
+        del_displacements_bar=del_displacements_bar,
+        del_displacements_t=del_displacements_t,
+        psi=psi,
+        delta_lambda=delta_lambda,
+        global_load=global_load,
+        arc_length=arc_length,
+    )
+    return a1, a2, a3
+
+
+def calc_lambda_criteria(
+    delta_displacements: Array,
+    del_displacements: Array,
+    delta_lambda: float,
+    del_lambda: float,
+    global_load: Array,
+    psi: float,
+):
+    return (
+        delta_displacements + del_displacements
+    ) @ delta_displacements + psi**2 * delta_lambda * (
+        delta_lambda + del_lambda
+    ) * global_load @ global_load
+
+
+def choose_del_lambda(
+    delta_displacements: Array,
+    del_displacements_values: Array,
+    delta_lambda: float,
+    del_lambdas: Array,
+    global_load: Array,
+    psi: float,
+):
+    return np.argmax(
+        np.array(
+            [
+                calc_lambda_criteria(
+                    delta_displacements=delta_displacements,
+                    del_displacements=del_displacements,
+                    delta_lambda=delta_lambda,
+                    del_lambda=del_lambda,
+                    global_load=global_load,
+                    psi=psi,
+                )
+                for del_displacements, del_lambda in zip(
+                    del_displacements_values, del_lambdas
+                )
+            ]
+        )
+    )

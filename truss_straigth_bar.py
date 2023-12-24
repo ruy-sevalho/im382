@@ -28,7 +28,7 @@ convergence_criteria = NewtonRaphsonConvergenceParam(
 )
 
 
-analysis = Analysis(truss=truss, convergence_crit=convergence_criteria)
+analysis = Analysis(truss=truss, newton_raphson_convergence_crit=convergence_criteria)
 res = analysis.results_rewton_raphson_plastic
 ps = res.plastic_strains
 stress = res.stresses

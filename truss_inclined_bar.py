@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 
 from truss2d import TrussInputs
 from newton_raphson import ConvergenceCriteria, NewtonRaphsonConvergenceParam
-from truss_large_deformation_plastic import Analysis
+from truss_large_deformation_plastic import Analysis, ArcLengthConvergenceCriteria
 
 
 coords = np.array([[0, 0], [100, 100]])  ## mm
@@ -27,17 +27,37 @@ convergence_criteria = NewtonRaphsonConvergenceParam(
     convergence_criteria=ConvergenceCriteria.DISPLACEMENT,
 )
 
+arc_length_convergence_crit = ArcLengthConvergenceCriteria(
+    precision=1e-5,
+    convergance_criteria=ConvergenceCriteria.FORCE,
+    intended_iterations_per_step=20,
+    initial_arc_length=1,
+    max_arc_length_ratio=2,
+    max_steps=1000,
+    max_iterations=100,
+    psi=0,
+)
 
-analysis = Analysis(truss=truss, convergence_crit=convergence_criteria)
-# res_plastic = analysis.results_rewton_raphson_plastic
-res_hyper = analysis.results_rewton_raphson_hyperelastic
-disp = res_hyper.displacements[:, 0]
-loads = res_hyper.loads[:, 0]
+analysis = Analysis(
+    truss=truss,
+    newton_raphson_convergence_crit=convergence_criteria,
+    arc_length_convergence_crit=arc_length_convergence_crit,
+)
+res_nr = analysis.results_rewton_raphson_hyperelastic
+disp_nr = res_nr.displacements[:, 0] / (100**2 + 100**2) ** 0.5
+loads_nr = res_nr.loads[:, 0] / analysis.truss.pre_process.global_load[0]
+
+res_hyper = analysis.results_arc_length_hyperelastic
+disp = res_hyper.displacements[:, 0] / (100**2 + 100**2) ** 0.5
+loads = res_hyper.lambdas
 ax: plt.Axes
 fig, ax = plt.subplots()
 fig.set_dpi(600)
 
-ax.plot(-disp, -loads, scalex=False, scaley=False)
+ax.plot(-disp_nr, loads_nr, label="NR elastic")
+ax.plot(-disp, loads, label="AL elastic")
+fig.legend()
+
 
 # x, y = coords[:, 0], coords[:, 1]
 # [plt.text(i, j, f"{n}", size=2) for n, (i, j) in enumerate(zip(x, y))]
